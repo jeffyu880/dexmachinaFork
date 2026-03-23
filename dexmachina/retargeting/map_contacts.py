@@ -482,11 +482,18 @@ if __name__ == "__main__":
                 
             if args.record_video and not saved_vid:
                 video_fname = os.path.join(save_path, f"{args.load_fname.split('/')[-1].replace('.npy', '.mp4')}")
-                from moviepy.editor import ImageSequenceClip
-                clip = ImageSequenceClip(frames, fps=15)
-                clip.write_videofile(video_fname)
-                print(f"Saved video to {video_fname}")
-                saved_vid = True
-                break
+                fps = 30
+                if len(frames) > 0:
+                    frame_height, frame_width = frames[0].shape[:2]
+                    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                    out = cv2.VideoWriter(video_fname, fourcc, fps, (frame_width, frame_height))
+                    for frame in frames:
+                        # Convert RGB to BGR for OpenCV
+                        frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                        out.write(frame_bgr)
+                    out.release()
+                    print(f"Saved video to {video_fname}")
+                else:
+                    print("No frames recorded, skipping video save")
     exit()
 

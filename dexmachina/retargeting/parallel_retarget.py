@@ -354,10 +354,10 @@ def main(args):
             # try the .pt file
             save_fname = save_fname.replace(".npy", ".pt")
             assert os.path.exists(save_fname), f"File {save_fname} does not exist"
-            loaded_data = torch.load(save_fname)
+            loaded_data = torch.load(save_fname, weights_only=False)
         else:
             if save_fname.endswith(".pt"):
-                loaded_data = torch.load(save_fname)
+                loaded_data = torch.load(save_fname, weights_only=False)
             else:
                 loaded_data = np.load(save_fname, allow_pickle=True).item()
 
@@ -452,14 +452,24 @@ def main(args):
             for side, hand in hands.items():
                 hand.collect_data_step(collect_all_envs=True)
     if args.render_image:
-        from moviepy.editor import ImageSequenceClip
-        clip = ImageSequenceClip(render_frames, fps=15)
-        
+        import cv2
         vfname = "retargeting/rendered_video.mp4"
         if args.raytrace:
             vfname = "retargeting/rendered_video_raytrace_whiteplane.mp4"
-        clip.write_videofile(vfname) #, codec="libx264")
-        print(f"Saved video to retargeting/{vfname}")
+        
+        if len(render_frames) > 0:
+            frame_height, frame_width = render_frames[0].shape[:2]
+            fps = 30
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(vfname, fourcc, fps, (frame_width, frame_height))
+            for frame in render_frames:
+                # Convert RGB to BGR for OpenCV
+                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                out.write(frame_bgr)
+            out.release()
+            print(f"Saved video to {vfname}")
+        else:
+            print("No frames recorded, skipping video save")
         breakpoint()
     print("Final control errors: ")
     for side, hand in hands.items():

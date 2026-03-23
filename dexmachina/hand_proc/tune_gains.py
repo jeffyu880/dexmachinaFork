@@ -256,7 +256,7 @@ def main(args):
     clip = str(args.clip)
     retargeted_fname = join(args.retarget_dir, hand, f"{clip}.pt")
     assert os.path.exists(retargeted_fname), f"Does not exist: {retargeted_fname}"
-    retar_data = torch.load(retargeted_fname)
+    retar_data = torch.load(retargeted_fname, weights_only=False)
     print(f"Loaded retargeted data from {retargeted_fname}")
 
     obj_name = clip.split('-')[0]

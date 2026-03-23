@@ -14,10 +14,19 @@ import json
 import pickle
 from datetime import datetime 
 
+# Monkey-patch torch.load to use weights_only=False by default
+# This is needed for loading RL-Games checkpoints with PyTorch 2.6+
+_original_torch_load = torch.load
+def patched_torch_load(*args, **kwargs):
+    if 'weights_only' not in kwargs:
+        kwargs['weights_only'] = False
+    return _original_torch_load(*args, **kwargs)
+torch.load = patched_torch_load
+
 from dexmachina.asset_utils import get_rl_config_path 
 from dexmachina.envs.base_env import BaseEnv
 from dexmachina.envs.contacts import get_contact_marker_cfgs
-from dexmachina.envs.constructors import get_common_argparser, parse_clip_string  
+from dexmachina.envs.constructors import get_common_argparser, parse_clip_string, get_all_env_cfg  
 from dexmachina.rl.rl_games_wrapper import RlGamesVecEnvWrapper, RlGamesGpuEnv
 
   
@@ -78,18 +87,23 @@ def eval_one_episode(env, agent, obj_state_tensor, print_rew=False, record_video
             demo_state = obj_state_tensor[env_step]
                     
             if show_reference: # visualize the demo traj and set zero action
-                obj.set_object_state(
-                    root_pos=state[:, :3][None],
-                    root_quat=state[:, 3:7][None],
-                    joint_qpos=state[:, 7][None],
-                    env_idxs=torch.tensor([1], dtype=torch.int32, device=device),
-                )
-                actions[-1, :] = -1.0 
-                for robot, joints in zip([left_hand, right_hand], [joint_target_left, joint_target_right]):
-                    robot.set_joint_position(
-                        joint_targets=joints[env_step][None],
-                        env_idxs=[1],
-                    ) 
+                if num_envs < 2:
+                    print(f"ERROR: show_reference requires at least 2 environments, but got {num_envs}")
+                    print("Re-run with --num_envs 2")
+                    show_reference = False
+                else:
+                    obj.set_object_state(
+                        root_pos=demo_state[:3][None],
+                        root_quat=demo_state[3:7][None],
+                        joint_qpos=demo_state[7:][None],
+                        env_idxs=torch.tensor([1], dtype=torch.int32, device=device),
+                    )
+                    actions[-1, :] = -1.0 
+                    for robot, joints in zip([left_hand, right_hand], [joint_target_left, joint_target_right]):
+                        robot.set_joint_position(
+                            joint_targets=joints[env_step][None],
+                            env_idxs=[1],
+                        ) 
             obs, rew, dones, infos = env.step(actions) 
             obj_pos, obj_quat, obj_arti = obj.root_pos, obj.root_quat, obj.dof_pos
             # print(f"Step {env_step}: Obj pos: {obj_pos.cpu().numpy()}")
@@ -118,6 +132,43 @@ def eval_one_episode(env, agent, obj_state_tensor, print_rew=False, record_video
     return frames, eval_data
 
 
+def get_camera_config(angle='front'):
+    """Get camera configuration by angle preset"""
+    cameras = {
+        'front': dict(
+            res=(512, 512),
+            fov=40,
+            pos=(0.5, -1.5, 1.2),
+            lookat=(0.0, -1.58, 2.0),
+        ),
+        'back': dict(
+            res=(512, 512),
+            fov=40,
+            pos=(-0.5, -1.5, 1.2),
+            lookat=(0.0, -1.58, 2.0),
+        ),
+        'top': dict(
+            res=(512, 512),
+            fov=40,
+            pos=(0.0, 0.0, 3.0),
+            lookat=(0.0, 0.0, 1.0),
+        ),
+        'side': dict(
+            res=(512, 512),
+            fov=40,
+            pos=(2.0, -1.5, 1.2),
+            lookat=(0.0, -1.58, 1.0),
+        ),
+        'isometric': dict(
+            res=(512, 512),
+            fov=40,
+            pos=(1.5, -1.5, 1.5),
+            lookat=(0.0, -1.58, 1.0),
+        ),
+    }
+    return cameras.get(angle, cameras['front'])
+
+
 def main():
 
     parser = get_common_argparser()
@@ -125,9 +176,11 @@ def main():
     parser.add_argument('--eval_episodes', '-ne', type=int, default=1)
     parser.add_argument('--print_rew', '-pr', action='store_true')
     parser.add_argument('--show_reference', '-ref', action='store_true') # if not ture, don't show the retargeted reference
+    parser.add_argument('--reference_clip', '-ref_clip', type=str, default=None, help='Alternative demonstration clip to use as reference trajectory (e.g., "box-0-100")')
     parser.add_argument('--output_render', '-or', action='store_true') # if not ture, don't show the retargeted reference
     parser.add_argument('--render_dir', '-out', type=str, default="rendered") # if not provided, save in the same folder as the checkpoint
     parser.add_argument('--video_fname', '-of', type=str, default="-eval.mp4") # if not provided, save in the same folder as the checkpoint
+    parser.add_argument('--camera_angle', '-cam', type=str, default='front', choices=['front', 'top', 'side', 'back', 'isometric'], help='Camera angle for video recording')
     
     args = parser.parse_args()
 
@@ -182,14 +235,10 @@ def main():
     if args.record_video:
         env_kwargs['env_cfg']['scene_kwargs']['use_visualizer'] = True  
         env_kwargs['env_cfg']['record_video'] = True 
-        print(f"Setting render resolution to 512") 
+        print(f"Setting render resolution to 512 with camera angle: {args.camera_angle}") 
         # env_kwargs['camera_res'] = (2048, 2048)
-        env_kwargs['env_cfg']['camera_kwargs']['front'] = dict(
-            res=(512, 512),
-            fov=40,
-            pos=(0.5, -1.5, 1.2),
-            lookat=(0.0, -1.58, 2.0),
-        ) 
+        camera_cfg = get_camera_config(args.camera_angle)
+        env_kwargs['env_cfg']['camera_kwargs']['front'] = camera_cfg 
     for name, cfg in env_kwargs['object_cfgs'].items():
         print("Setting eval time obj gains to 0.0")
         cfg['actuated'] = False
@@ -204,7 +253,28 @@ def main():
     env = BaseEnv(
          **env_kwargs
     )
-    demo_data = env_kwargs['demo_data']
+    
+    # Load reference clip (either alternative or default training clip)
+    if args.reference_clip is not None:
+        print(f"\n[INFO] Loading alternative reference clip: {args.reference_clip}")
+        from dexmachina.envs.constructors import get_all_env_cfg
+        # Parse reference clip
+        obj_name, start, end, subject_name, use_clip = parse_clip_string(args.reference_clip)
+        # Create temporary args for loading reference clip
+        ref_args = argparse.Namespace(**env_kwargs['env_cfg'])
+        ref_args.arctic_object = obj_name
+        ref_args.frame_start = start
+        ref_args.frame_end = end
+        ref_args.arctic_subject = subject_name  # Override subject if different from training
+        ref_args.use_clip = use_clip  # Override use_clip if different
+        # Load reference clip data
+        ref_env_cfg = get_all_env_cfg(ref_args, device='cuda:0')
+        demo_data = ref_env_cfg['demo_data']
+        print(f"[INFO] Loaded reference clip: {args.reference_clip}")
+        print(f"       Subject: {subject_name}, Frames: {start}-{end} ({int(end)-int(start)} frames)")
+    else:
+        demo_data = env_kwargs['demo_data']
+    
     obj_state_tensor = gather_object_state_tensor(demo_data)
 
     agent_cfg_fname = get_rl_config_path("rl_games_ppo_cfg")
@@ -244,11 +314,21 @@ def main():
         # try loading the data
         # eval_data = np.load(ckpt_eval_fname, allow_pickle=True).item() 
         if args.record_video: 
-            # save video with moviepy
-            from moviepy.editor import ImageSequenceClip
-            clip = ImageSequenceClip(frames, fps=int(1/uenv.dt/2))
-            clip.write_videofile(video_fname)
-            print(f"Saved video to {video_fname}")
+            # save video with opencv (cv2)
+            import cv2
+            fps = int(1/uenv.dt/2)
+            if len(frames) > 0:
+                frame_height, frame_width = frames[0].shape[:2]
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                out = cv2.VideoWriter(video_fname, fourcc, fps, (frame_width, frame_height))
+                for frame in frames:
+                    # Convert RGB to BGR for OpenCV
+                    frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                    out.write(frame_bgr)
+                out.release()
+                print(f"Saved video to {video_fname}")
+            else:
+                print("No frames recorded, skipping video save")
     
     print("Done evaluating")
 
