@@ -36,7 +36,147 @@ import moviepy
 from rl_games.common import env_configurations, vecenv
 from rl_games.common.algo_observer import IsaacAlgoObserver
 from rl_games.torch_runner import Runner
+from scipy.spatial.transform import Rotation
  
+
+def compute_auc_add3(obj_states, obj_demo_states, object_models=None, num_timesteps=-1):
+    """
+    Compute AUC-ADD3 metric for object pose estimation.
+    
+    ADD (Average Distance of Model Points) measures the average L2 distance between
+    transformed object points under estimated and ground truth poses.
+    
+    Args:
+        obj_states: (T, 8) agent's object states [pos(3), quat(4), arti(1)]
+        obj_demo_states: (T, 8) ground truth object states [pos(3), quat(4), arti(1)]
+        object_models: dict with 'vertices' key containing object point cloud or None
+        num_timesteps: int, number of timesteps to use for ADD calculation (-1 for all, default -1)
+    
+    Returns:
+        dict with keys:
+            - 'add_errors': (T,) ADD error at each timestep
+            - 'add3_errors': (T,) ADD-3 errors (computed with 3 thresholds)
+            - 'auc_add3': float, Area Under Curve for ADD-3
+            - 'add_auc': float, Average ADD error
+    """
+    T = obj_states.shape[0]
+    
+    # Select timesteps if specified
+    if num_timesteps > 0:
+        obj_states = obj_states[:num_timesteps]
+        obj_demo_states = obj_demo_states[:num_timesteps]
+        T = num_timesteps
+        print(f"Using first {num_timesteps} timesteps for ADD metric calculation")
+    
+    device = torch.device('cuda:0')
+
+    obj_states = torch.tensor(obj_states, dtype=torch.float32, device=device)
+    obj_states = torch.squeeze(obj_states)
+
+    # Extract poses
+    agent_pos = torch.tensor(obj_states[:, :3], dtype=torch.float32, device=device)
+    agent_quat = torch.tensor(obj_states[:, 3:7], dtype=torch.float32, device=device)  # (T, 4)
+
+    # print(agent_pos)
+    # print(agent_quat)   
+
+    demo_pos = torch.tensor(obj_demo_states[:, :3], dtype=torch.float32, device=device)
+    demo_quat = torch.tensor(obj_demo_states[:, 3:7], dtype=torch.float32, device=device)  # (T, 4)
+    
+    # print(demo_pos)
+    # print(demo_quat)
+
+    # Use object vertices if provided
+    if object_models is not None and 'vertices' in object_models:
+        vertices = torch.tensor(object_models['vertices'], dtype=torch.float32, device=device)
+        vertices = vertices.unsqueeze(0).repeat(T, 1, 1)  # (T, N, 3)
+        print("using vertices")
+    else:
+        print("No vertices to compute ADD with")
+        return None
+
+    
+    # Transform vertices using agent pose
+    agent_R = Rotation.from_quat(agent_quat.cpu().numpy()).as_matrix()  # (T, 3, 3)
+    agent_vertices = torch.tensor(agent_R, dtype=torch.float32, device=device) @ vertices.transpose(1, 2)
+    agent_vertices = agent_vertices.transpose(1, 2) + agent_pos.unsqueeze(1)  # (T, N, 3)
+    
+    # Transform vertices using demo pose (ground truth)
+    demo_R = Rotation.from_quat(demo_quat.cpu().numpy()).as_matrix()  # (T, 3, 3)
+    demo_vertices = torch.tensor(demo_R, dtype=torch.float32, device=device) @ vertices.transpose(1, 2)
+    demo_vertices = demo_vertices.transpose(1, 2) + demo_pos.unsqueeze(1)  # (T, N, 3)
+    
+    # Average distance between corresponding points
+    point_distances = torch.norm(agent_vertices - demo_vertices, dim=2)  # (T, N)
+    
+    # Check if we have per-part information
+    if 'num_bottom' in object_models and 'num_top' in object_models:
+        num_bottom = object_models['num_bottom']
+        num_top = object_models['num_top']
+        
+        # Split point distances into bottom and top
+        bottom_distances = point_distances[:, :num_bottom]  # (T, num_bottom)
+        top_distances = point_distances[:, num_bottom:]      # (T, num_top)
+        
+        print("bottom distances shape: ", bottom_distances.shape)
+        print("top distances shape: ", top_distances.shape)
+
+        # Compute ADD for each part
+        bottom_add = torch.mean(bottom_distances, dim=1)  # (T,)
+        top_add = torch.mean(top_distances, dim=1)        # (T,)
+
+        print("Top ADD error: ", (top_add))
+        print("Bottom ADD error: ", (bottom_add))
+
+        # Average per-part ADD
+        add_avg_errors = (torch.sum(bottom_add.unsqueeze(dim=1) + top_add.unsqueeze(dim=1), dim=1) / 2.0)  # (T,)
+        
+        print("add avg errors: ", add_avg_errors)
+
+        print(f"Computing ADD per-part:")
+        print(f"  Bottom vertices: {num_bottom}")
+        print(f"  Top vertices: {num_top}")
+
+        # Fall back to overall ADD if per-part info not available
+        add_errors = torch.mean(point_distances, dim=1)  # (T,) - average over points
+       
+    
+    # Compute ADD-3 (typically uses 3 different distance thresholds)
+    thresholds = [0.03, 0.05, 0.1]  # 3cm, 5cm, 10cm
+    add3_scores = []
+    add3_avg_scores = []
+    
+    for threshold in thresholds:
+        # Metric 1: Per-point ADD-3
+        # For each timestep, what % of individual points are within threshold?
+        within_threshold = (point_distances <= threshold).float()  # (T, N)
+        accuracy = torch.mean(within_threshold, dim=1)  # (T,) - avg across points
+        add3_scores.append(accuracy.cpu().numpy())
+
+        # Metric 2: Per-part averaged ADD-3
+        # For each timestep, is the averaged ADD (bottom+top)/2 within threshold?
+        within_threshold = (add_avg_errors.squeeze() <= threshold).float()  # (T,) - squeeze out dim 1
+        add3_avg_scores.append(within_threshold.cpu().numpy())  # (# threshold, T)
+    
+    # AUC-ADD3: area under curve of the ADD-3 metric
+    # Average the three threshold scores
+    add3_mean = np.mean(add3_scores, axis=0)  # (T,)
+    auc_add3 = np.mean(add3_mean)
+
+    # AUC-ADD3: area under curve for ADD-3 using the average ADD from the top and bottom
+    avg_add3_mean = np.mean(add3_avg_scores, axis=0)
+    auc_avg_add3 = np.mean(avg_add3_mean)
+    
+    return {
+        'mean_add_errors': np.mean(add_errors.cpu().numpy()),         # the mean across all timesteps for the errors calculated for every point on the object
+        'mean_avg_add_errors': np.mean(add_avg_errors.cpu().numpy()),        # the mean across all timesteps for the average ADD error, taken between top and bottom objects
+        'auc_avg_add3': auc_avg_add3,           # the auc calculated taken from the mean add from the top and bottom object parts
+        'auc_add3': float(auc_add3),        # the auc calculated taken from all the points
+        # 'add_mean': float(np.mean(add_errors.cpu().numpy())),
+        # 'add_max': float(np.max(add_errors.cpu().numpy())),
+        # 'add_min': float(np.min(add_errors.cpu().numpy())),
+    }
+
 
 def gather_object_state_tensor(demo_data):
     """ demo data should already be sliced since it's loaded from env kwargs """
@@ -127,47 +267,111 @@ def eval_one_episode(env, agent, obj_state_tensor, print_rew=False, record_video
             for k, v in rew_dict.items():
                 if 'con' in k:
                     print(f"Step {env_step}: {k}: {v.cpu().numpy()}")
+
+    # print("OBJ: ")
+    # print(eval_data["obj_state"])
+    # print("DEMO: ")
+    # print(eval_data["demo_state"])
+
     eval_data = {k: np.stack(v) for k, v in eval_data.items()}
     frames = uenv.get_recorded_frames()
     return frames, eval_data
 
 
-def get_camera_config(angle='front'):
-    """Get camera configuration by angle preset"""
+def get_camera_config(angle='front', res=1024):
+    """Get camera configuration by angle preset
+    
+    Args:
+        angle: Camera angle ('front', 'back', 'top', 'side', 'isometric')
+        res: Resolution in pixels (width and height, e.g., 1024, 2048)
+    """
     cameras = {
         'front': dict(
-            res=(512, 512),
-            fov=40,
-            pos=(0.5, -1.5, 1.2),
-            lookat=(0.0, -1.58, 2.0),
+            res=(res, res),
+            fov=30,
+            pos=(0.0, -1.6, 2.2),
+            lookat=(0.0, -0.1, 1.2),
         ),
         'back': dict(
-            res=(512, 512),
-            fov=40,
-            pos=(-0.5, -1.5, 1.2),
-            lookat=(0.0, -1.58, 2.0),
+            res=(res, res),
+            fov=25,
+            pos=(0.4, 1.5, 1.8),
+            lookat=(0.0, -0.15, 1.0),
         ),
         'top': dict(
-            res=(512, 512),
-            fov=40,
+            res=(res, res),
+            fov=30,
             pos=(0.0, 0.0, 3.0),
             lookat=(0.0, 0.0, 1.0),
         ),
         'side': dict(
-            res=(512, 512),
-            fov=40,
-            pos=(2.0, -1.5, 1.2),
-            lookat=(0.0, -1.58, 1.0),
+            res=(res, res),
+            fov=30,
+            pos=(3.5, -0.1, 1.5),
+            lookat=(0.0, -0.1, 1.0),
         ),
         'isometric': dict(
-            res=(512, 512),
-            fov=40,
-            pos=(1.5, -1.5, 1.5),
-            lookat=(0.0, -1.58, 1.0),
+            res=(res, res),
+            fov=30,
+            pos=(1.5, -1.5, 1.8),
+            lookat=(0.0, -0.1, 1.0),
         ),
     }
     return cameras.get(angle, cameras['front'])
 
+
+def load_object_model_for_evaluation(obj_name):
+    """
+    Load object mesh vertices for ADD metric calculation.
+    
+    Args:
+        obj_name: str, object name from ARCTIC dataset
+        
+    Returns:
+        dict with 'vertices' key containing (N, 3) vertex positions
+    """
+    try:
+        import trimesh
+    except ImportError:
+        print("Warning: trimesh not installed. Install with: pip install trimesh")
+        return None
+    
+    from dexmachina.envs.object import get_arctic_object_cfg
+    from pathlib import Path
+    
+    try:
+        obj_cfg = get_arctic_object_cfg(name=obj_name)
+        
+        # Load both parts of the articulated object
+        bottom_path = obj_cfg['bottom_mesh_fname']
+        top_path = obj_cfg['top_mesh_fname']
+        
+        # Load meshes
+        bottom_mesh = trimesh.load(bottom_path)
+        top_mesh = trimesh.load(top_path)
+        
+        # Combine vertices from both parts
+        all_vertices = np.vstack([
+            bottom_mesh.vertices,
+            top_mesh.vertices
+        ])
+        
+        print(f"[Object Mesh] Loaded {obj_name}")
+        print(f"  Bottom vertices: {bottom_mesh.vertices.shape[0]}")
+        print(f"  Top vertices: {top_mesh.vertices.shape[0]}")
+        print(f"  Total vertices: {all_vertices.shape[0]}")
+        
+        return {
+            'vertices': all_vertices,
+            'bottom_vertices': bottom_mesh.vertices,
+            'top_vertices': top_mesh.vertices,
+            'num_bottom': bottom_mesh.vertices.shape[0],
+            'num_top': top_mesh.vertices.shape[0]
+        }
+        
+    except Exception as e:
+        print(f"Warning: Could not load object mesh: {e}")
+        return None
 
 def main():
 
@@ -181,6 +385,7 @@ def main():
     parser.add_argument('--render_dir', '-out', type=str, default="rendered") # if not provided, save in the same folder as the checkpoint
     parser.add_argument('--video_fname', '-of', type=str, default="-eval.mp4") # if not provided, save in the same folder as the checkpoint
     parser.add_argument('--camera_angle', '-cam', type=str, default='front', choices=['front', 'top', 'side', 'back', 'isometric'], help='Camera angle for video recording')
+    parser.add_argument('--resolution', '-res', type=int, default=1024, help='Video resolution in pixels (512-4096, default 1024)')
     
     args = parser.parse_args()
 
@@ -196,7 +401,7 @@ def main():
     if args.output_render:
         render_dir = os.path.join(args.render_dir, run_name)
         print('Saving video to a different folder')
-        video_fname = os.path.join(render_dir, ckpt_name.split(".")[0] + args.video_fname)
+        video_fname = os.path.join(render_dir, ckpt_name.split(".")[0] + args.camera_angle + args.video_fname)
         os.makedirs(render_dir, exist_ok=True)
 
     assert os.path.exists(saved_cfg_fname), f"File {saved_cfg_fname} does not exist"
@@ -235,10 +440,16 @@ def main():
     if args.record_video:
         env_kwargs['env_cfg']['scene_kwargs']['use_visualizer'] = True  
         env_kwargs['env_cfg']['record_video'] = True 
-        print(f"Setting render resolution to 512 with camera angle: {args.camera_angle}") 
-        # env_kwargs['camera_res'] = (2048, 2048)
-        camera_cfg = get_camera_config(args.camera_angle)
-        env_kwargs['env_cfg']['camera_kwargs']['front'] = camera_cfg 
+        print(f"Setting render resolution to {args.resolution}x{args.resolution} with camera angle: {args.camera_angle}") 
+        # Get the camera config with specified resolution
+        camera_cfg = get_camera_config(args.camera_angle, res=args.resolution)
+        # Make sure the camera_kwargs has this angle defined
+        if 'camera_kwargs' not in env_kwargs['env_cfg']:
+            env_kwargs['env_cfg']['camera_kwargs'] = {}
+        env_kwargs['env_cfg']['camera_kwargs'][args.camera_angle] = camera_cfg
+        # Set the render_camera to use the specified angle
+        env_kwargs['env_cfg']['render_camera'] = args.camera_angle
+        print(f"Camera config set: pos={camera_cfg['pos']}, lookat={camera_cfg['lookat']}, res={camera_cfg['res']}") 
     for name, cfg in env_kwargs['object_cfgs'].items():
         print("Setting eval time obj gains to 0.0")
         cfg['actuated'] = False
@@ -274,7 +485,14 @@ def main():
         print(f"       Subject: {subject_name}, Frames: {start}-{end} ({int(end)-int(start)} frames)")
     else:
         demo_data = env_kwargs['demo_data']
+
+    # Extract object name from object_cfgs (it's the key in the dictionary)
+    obj_name = list(env_kwargs['object_cfgs'].keys())[0]
+    assert obj_name is not None, "ERROR: obj_name not found in object_cfgs. Object was not saved correctly in the environment!"
     
+    print(f"[INFO] Loading object: {obj_name}")
+    # Load object mesh for ADD metric
+    object_models = load_object_model_for_evaluation(obj_name)
     obj_state_tensor = gather_object_state_tensor(demo_data)
 
     agent_cfg_fname = get_rl_config_path("rl_games_ppo_cfg")
@@ -308,6 +526,33 @@ def main():
         frames, eval_data = eval_one_episode(
             env, agent, obj_state_tensor, args.print_rew, args.record_video, args.show_reference
             )
+        
+        if object_models is not None:
+            # Compute AUC-ADD3 metric
+            print("\n" + "="*60)
+            print("Computing AUC-ADD3 Metric")
+            print("="*60)
+            add3_metrics = compute_auc_add3(
+                eval_data['obj_state'][:, 0, :],        # take just the first policy demonstration
+                eval_data['demo_state'],
+                object_models=object_models,  # Can pass object vertices if available
+                num_timesteps=80            # number of timesteps to use for ADD calculations
+            )
+            
+            # Add AUC-ADD3 metrics to eval_data
+            eval_data['mean_add_errors'] = add3_metrics['mean_add_errors']
+            eval_data['mean_avg_add_errors'] = add3_metrics['mean_avg_add_errors']
+            eval_data['auc_add3'] = add3_metrics['auc_add3']
+            eval_data['avg_auc3_add_errors'] = add3_metrics['auc_avg_add3']
+            # eval_data['auc_add3'] = add3_metrics['auc_add3']
+            
+            # Print AUC-ADD3 results
+            print(f"ADD Errors: {add3_metrics['mean_add_errors']}")
+            print(f"Average ADD Errors: {add3_metrics['mean_avg_add_errors']}")
+            print(f"AUC-ADD3 Score: {add3_metrics['auc_add3']:.6f}")
+            print(f"Average AUC3 ADD Errors: {add3_metrics['auc_avg_add3']:.6f}")
+            print("="*60 + "\n")
+        
         ckpt_eval_fname = os.path.join(ckpt_data_folder, f"eval_ep{eps}.npy")
         np.save(ckpt_eval_fname, eval_data)
         print(f"Saved eval data to {ckpt_eval_fname}")
