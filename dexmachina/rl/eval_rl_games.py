@@ -121,7 +121,7 @@ def compute_auc_add3(obj_states, obj_demo_states, object_models=None, num_timest
         print("bottom distances shape: ", bottom_distances.shape)
         print("top distances shape: ", top_distances.shape)
 
-        # Compute ADD for each part
+        # Compute ADD for each part for each timestep
         bottom_add = torch.mean(bottom_distances, dim=1)  # (T,)
         top_add = torch.mean(top_distances, dim=1)        # (T,)
 
@@ -166,12 +166,13 @@ def compute_auc_add3(obj_states, obj_demo_states, object_models=None, num_timest
     # AUC-ADD3: area under curve for ADD-3 using the average ADD from the top and bottom
     avg_add3_mean = np.mean(add3_avg_scores, axis=0)
     auc_avg_add3 = np.mean(avg_add3_mean)
-    
+
     return {
         'mean_add_errors': np.mean(add_errors.cpu().numpy()),         # the mean across all timesteps for the errors calculated for every point on the object
         'mean_avg_add_errors': np.mean(add_avg_errors.cpu().numpy()),        # the mean across all timesteps for the average ADD error, taken between top and bottom objects
         'auc_avg_add3': auc_avg_add3,           # the auc calculated taken from the mean add from the top and bottom object parts
         'auc_add3': float(auc_add3),        # the auc calculated taken from all the points
+        'episode_length': T,                # Include episode length
         # 'add_mean': float(np.mean(add_errors.cpu().numpy())),
         # 'add_max': float(np.max(add_errors.cpu().numpy())),
         # 'add_min': float(np.min(add_errors.cpu().numpy())),
@@ -301,7 +302,7 @@ def get_camera_config(angle='front', res=1024):
         'top': dict(
             res=(res, res),
             fov=30,
-            pos=(0.0, 0.0, 3.0),
+            pos=(0.0, 0.0, 5.0),
             lookat=(0.0, 0.0, 1.0),
         ),
         'side': dict(
@@ -313,7 +314,7 @@ def get_camera_config(angle='front', res=1024):
         'isometric': dict(
             res=(res, res),
             fov=30,
-            pos=(1.5, -1.5, 1.8),
+            pos=(2.2, -2.2, 2.6),
             lookat=(0.0, -0.1, 1.0),
         ),
     }
@@ -552,6 +553,27 @@ def main():
             print(f"AUC-ADD3 Score: {add3_metrics['auc_add3']:.6f}")
             print(f"Average AUC3 ADD Errors: {add3_metrics['auc_avg_add3']:.6f}")
             print("="*60 + "\n")
+
+            # Save ADD metrics to JSON file with checkpoint name
+            try:
+                add_metrics_fname = os.path.join(ckpt_data_folder, f"{ckpt_name.split('.')[0]}_add_metrics_ep{eps}.json")
+                
+                # Ensure parent directory exists
+                os.makedirs(os.path.dirname(add_metrics_fname), exist_ok=True)
+                
+                metrics_to_save = {
+                    'mean_add_errors': float(add3_metrics['mean_add_errors']),
+                    'mean_avg_add_errors': float(add3_metrics['mean_avg_add_errors']),
+                    'auc_add3': float(add3_metrics['auc_add3']),
+                    'auc_avg_add3': float(add3_metrics['auc_avg_add3']),
+                    'episode_length': int(add3_metrics['episode_length']),
+                    'checkpoint': args.checkpoint,
+                }
+                with open(add_metrics_fname, 'w') as f:
+                    json.dump(metrics_to_save, f, indent=2)
+                print(f"✓ Saved ADD metrics to {add_metrics_fname}")
+            except Exception as e:
+                print(f"✗ Error saving ADD metrics JSON: {e}")
         
         ckpt_eval_fname = os.path.join(ckpt_data_folder, f"eval_ep{eps}.npy")
         np.save(ckpt_eval_fname, eval_data)

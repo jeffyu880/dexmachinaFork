@@ -178,6 +178,13 @@ def main():
         runner_args["checkpoint"] = os.path.abspath(args.checkpoint) 
     runner.run(runner_args)
 
+    # send wandb alert when training is finished
+    wandb.alert(
+        title="Training Finished",
+        text=f"Training for experiment '{exp_name}' has completed successfully.",
+        level="info"
+    )
+
     # close the simulator
     exit()
 
