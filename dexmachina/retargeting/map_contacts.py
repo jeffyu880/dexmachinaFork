@@ -222,6 +222,11 @@ def show_hand_joints_links_plt(hand_entites):
     plt.show()
     
 def show_hand_kpts_scene(scene, hand_entites, markers):
+    # Flatten marker dictionary into a single list
+    all_markers = []
+    for key in sorted(markers.keys()):
+        all_markers.extend(markers[key])
+    
     marker_offset = 0
     for side, hand in hand_entities.items():
         # link_pos = np.array([link.pos for link in hand.links])
@@ -236,9 +241,9 @@ def show_hand_kpts_scene(scene, hand_entites, markers):
         positions = aabb_centers
         for i, pos in enumerate(positions):
             idx = marker_offset + i
-            if idx >= len(markers):
+            if idx >= len(all_markers):
                 break
-            markers[idx].set_pos(pos[None])
+            all_markers[idx].set_pos(pos[None])
         marker_offset += len(positions)
     scene.step()
     breakpoint()

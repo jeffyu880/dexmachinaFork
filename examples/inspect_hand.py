@@ -46,12 +46,12 @@ def main(args):
     robot.post_scene_build_setup()
     robot.reset_idx() 
     step = 0 
-    max_step = 200
+    max_step = 2000
     iters = 0
-    rand_actions = np.random.randn(max_step, robot.action_dim)
-    rand_actions = torch.tensor(rand_actions, dtype=torch.float32, device=device)
+    # Use zero actions instead of random actions to keep the hand stationary
+    zero_actions = torch.zeros(max_step, robot.action_dim, dtype=torch.float32, device=device)
     while True:
-        robot.step(rand_actions[step].repeat(num_envs, 1))
+        robot.step(zero_actions[step].repeat(num_envs, 1))
         _ = robot.get_observations()
         step += 1
         scene.step()

@@ -5,6 +5,7 @@ import copy
 import genesis as gs
 import argparse
 import numpy as np
+import time
 
 from dexmachina.envs.object import ArticulatedObject, get_arctic_object_cfg
 from dexmachina.envs.demo_data import get_demo_data
@@ -68,6 +69,9 @@ def main(args):
     obj.post_scene_build_setup()
     step = 0
     max_step = 300
+    frame_delay = 1.0 / args.playback_fps  # Delay between frames
+    last_frame_time = time.time()
+    
     while True:
         if args.load_demo:
             _pos, _quat, _arti = obj_pos[step][None], obj_quat[step][None], obj_arti[step][None]
@@ -88,6 +92,13 @@ def main(args):
         if step > max_step: 
             step = 0
             scene.reset()
+        
+        # Frame rate control for slow-motion playback
+        elapsed = time.time() - last_frame_time
+        sleep_time = frame_delay - elapsed
+        if sleep_time > 0:
+            time.sleep(sleep_time)
+        last_frame_time = time.time()
             
 
 if __name__ == '__main__':
@@ -98,5 +109,6 @@ if __name__ == '__main__':
     parser.add_argument('--obj_name', '-ao', type=str, default='box')
     parser.add_argument('--actuate_object', action='store_true')
     parser.add_argument('--load_demo', action='store_true')
+    parser.add_argument('--playback_fps', type=int, default=10, help='Playback speed in FPS (lower = slower)')
     args = parser.parse_args()
     main(args)
