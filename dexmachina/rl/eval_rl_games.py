@@ -492,6 +492,11 @@ def main():
     assert obj_name is not None, "ERROR: obj_name not found in object_cfgs. Object was not saved correctly in the environment!"
     
     print(f"[INFO] Loading object: {obj_name}")
+    # Print the saved object position from training config
+    obj_init_pos = env_kwargs['object_cfgs'][obj_name]['base_init_pos']
+    obj_init_quat = env_kwargs['object_cfgs'][obj_name]['base_init_quat']
+    print(f"[INFO] Saved ketchup init position: {obj_init_pos}")
+    print(f"[INFO] Saved ketchup init quaternion: {obj_init_quat}")
     # Load object mesh for ADD metric
     object_models = load_object_model_for_evaluation(obj_name)
     obj_state_tensor = gather_object_state_tensor(demo_data)

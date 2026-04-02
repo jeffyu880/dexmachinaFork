@@ -3,20 +3,20 @@ PARAM_FILE="training_params_$(date +%Y%m%d_%H%M%S).txt"
 
 # Define parameters once as associative arrays
 declare -A PARAMS=(
-    [batch_size]="-B 2048"
+    [batch_size]="-B 2048"      # should be the num_envs
     [epochs]="-obf -obt --max_epochs 5000"
     [object]="--actuate_object --retarget_name para --horizon 32"
     [learning]="-imw 0.5 --learning_rate 0.0003"
     [curriculum]="--gain_mode all --curr_schedule uniform --wait_epochs 200 --num_zero_epoch 500"
     [gains]="--fixed_mode uniform --uniform_mode slow --group_collisions"
-    [rewards]="--contact_beta 30 --upper_ratios 0.9 0.9 1 --lower_ratios 0.6 0.6 1"
+    [rewards]="--contact_beta 10 --upper_ratios 0.9 0.9 1 --lower_ratios 0.6 0.6 1"
     [task_rewards]="--task_rew_betas 10 1 5 --action_penalty 0.01 --dialback_ep_len 30"
     [thresholds]="--aux_reset_thres 0 0 0 --curr_rew_thres 0.6 0 0 0"
     [training]="--skip_grad --deque_len 20 --save_freq 500 --use_retarget_contact"
     [arm_model]="-am hybrid --hybrid_scales 0.1 1.0 --kp_init 80 --kv_init 5"
     [demo]="--clip ketchup-30-130"
     [weights]="-imi 0.2 -bc 0.2 -con 2.0 -ert 0.5"
-    [experiment]="-exp allegro-ketchup100-mandicp2"
+    [experiment]="-exp allegro-ketchup100-mandicp3"
     [hand]="--hand allegro_hand"
     [seed]="--seed 24"
     # [checkpoint]="--checkpoint /home/jeffrey/Documents/Manipulation/Genesis/dexmachina/logs/rl_games/allegro_hand/allegro-example_ketchup20-140-s01-u01_B2048_hybrid_thres0.6_ho16_imi0.3_con3.0_bc0.3/nn/last_allegro_hand_ep_3500_rew_77.97218.pth"

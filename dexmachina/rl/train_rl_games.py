@@ -9,6 +9,7 @@ import argparse
 import numpy as np
 import genesis as gs
 from datetime import datetime 
+from wandb import AlertLevel
 
 from rl_games.common import env_configurations, vecenv
 from rl_games.common.algo_observer import IsaacAlgoObserver
@@ -182,7 +183,7 @@ def main():
     wandb.alert(
         title="Training Finished",
         text=f"Training for experiment '{exp_name}' has completed successfully.",
-        level="info"
+        level=AlertLevel.INFO
     )
 
     # close the simulator

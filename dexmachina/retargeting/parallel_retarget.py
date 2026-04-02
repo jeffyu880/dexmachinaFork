@@ -129,10 +129,10 @@ def create_scene(
             visualize_contact=visualize_contact,
         ) 
     camera = scene.add_camera(
-        pos=(12, -11.5, 2),
-        lookat=(-12, 11.5, 0),
+        pos=(-5, 8, 4),
+        lookat=(-6, 5, 0),
         res=(1024, 1024), 
-        fov=65, 
+        fov=90, 
         GUI=False
         )
 
@@ -419,6 +419,12 @@ def main(args):
     iters = 0
     controlled_steps = {side: torch.zeros(num_envs, device=device) for side in ['left', 'right']}
     for i in range(args.control_steps):
+        # Print hand z position for first step
+        if i == 0:
+            for side, hand in hands.items():
+                hand_pos = hand.entity.get_links_pos()[0, hand.wrist_link_idx, :]  # Get wrist position (x, y, z)
+                print(f"[Step {i}] {side.capitalize()} hand wrist z position: {hand_pos[2]:.4f}")
+        
         set_init_object_states(obj, obj_pos, obj_quat, obj_arti, joint_only=True)
         for side in ['left', 'right']:
             hand = hands[side] 
