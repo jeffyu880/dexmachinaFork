@@ -37,7 +37,74 @@ from rl_games.common import env_configurations, vecenv
 from rl_games.common.algo_observer import IsaacAlgoObserver
 from rl_games.torch_runner import Runner
 from scipy.spatial.transform import Rotation
- 
+
+
+def remap_paths_in_config(config, server_username='jsyu', local_base_path=None):
+    """
+    Recursively remap server paths to local paths in configuration dictionaries.
+    Handles the case where a checkpoint trained on a server has hard-coded paths
+    that need to be mapped to the local machine.
+    
+    Args:
+        config: Configuration dictionary (or nested structure) to remap
+        server_username: Username on the server (default 'jsyu')
+        local_base_path: Local base path to use for remapping (auto-detected if None)
+    
+    Returns:
+        The config with paths remapped
+    """
+    from pathlib import Path
+    
+    # Auto-detect local base path if not provided
+    if local_base_path is None:
+        # Get current working directory and find the appropriate base
+        cwd = os.getcwd()
+        if 'dexmachina' in cwd:
+            # Extract the Genesis prefix
+            if '/Genesis/' in cwd:
+                local_base_path = cwd.split('/Genesis/')[0] + '/Genesis'
+            else:
+                local_base_path = '/home/jeffrey/Documents/Manipulation/Genesis'
+        else:
+            local_base_path = '/home/jeffrey/Documents/Manipulation/Genesis'
+    
+    if isinstance(config, dict):
+        remapped = {}
+        for key, value in config.items():
+            remapped[key] = remap_paths_in_config(value, server_username, local_base_path)
+        return remapped
+    elif isinstance(config, list):
+        return [remap_paths_in_config(item, server_username, local_base_path) for item in config]
+    elif isinstance(config, (str, Path)):
+        # Convert Path to string for processing
+        config_str = str(config)
+        # Check if this is a server path
+        if f'/home/{server_username}/' in config_str:
+            # Replace server path with local path
+            # Extract the part after Genesis/
+            if '/Genesis/' in config_str:
+                genesis_part = config_str.split('/Genesis/', 1)[1]
+                # Try to construct the path
+                local_path = os.path.join(local_base_path, genesis_part)
+                
+                # If file doesn't exist, try alternative folder (dexmachina <-> dexmachinaFork)
+                if not os.path.exists(local_path):
+                    if 'dexmachinaFork' in local_path:
+                        alt_path = local_path.replace('dexmachinaFork', 'dexmachina', 1)
+                    else:
+                        alt_path = local_path.replace('dexmachina', 'dexmachinaFork', 1)
+                    
+                    if os.path.exists(alt_path):
+                        local_path = alt_path
+                
+                print(f"[Path Remap] {config_str} -> {local_path}")
+                return local_path
+        # Always return as string
+        return config_str
+    else:
+        return config
+
+
 
 def compute_auc_add3(obj_states, obj_demo_states, object_models=None, num_timesteps=-1):
     """
@@ -409,6 +476,10 @@ def main():
     # load to pkl
     with open(saved_cfg_fname, "rb") as f:
         env_kwargs = pickle.load(f)
+    
+    # Remap server paths to local paths
+    print("[INFO] Remapping server paths to local paths...")
+    env_kwargs = remap_paths_in_config(env_kwargs, server_username='jsyu')
     
     assert env_kwargs['env_cfg']['use_rl_games'], "The saved environment is not from rl-games"
     
