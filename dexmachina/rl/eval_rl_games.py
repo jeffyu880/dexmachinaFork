@@ -457,6 +457,22 @@ def main():
     
     args = parser.parse_args()
 
+    # Convert checkpoint path to absolute path if relative
+    if not os.path.isabs(args.checkpoint):
+        args.checkpoint = os.path.abspath(args.checkpoint)
+        print(f"[Path] Converted to absolute path: {args.checkpoint}")
+    
+    # Remove duplicate 'dexmachina' in path if present
+    # e.g., /path/to/dexmachina/dexmachina/dexmachina/izar_logs -> /path/to/dexmachina/dexmachina/izar_logs
+    while '/dexmachina/dexmachina/dexmachina/' in args.checkpoint:
+        args.checkpoint = args.checkpoint.replace('/dexmachina/dexmachina/dexmachina/', '/dexmachina/dexmachina/')
+        print(f"[Path] Removed duplicate 'dexmachina': {args.checkpoint}")
+
+    # Auto-enable video recording if output_render is requested
+    if args.output_render:
+        args.record_video = True
+        print("[INFO] Video recording enabled (output_render requested)")
+
     ckpt_path = "/".join(args.checkpoint.split("/")[:-2])
     saved_cfg_fname = os.path.join(ckpt_path, "params", "env.pkl")
     
