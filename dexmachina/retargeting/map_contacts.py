@@ -481,6 +481,7 @@ if __name__ == "__main__":
                 if not args.render_only:
                     np.save(save_fname, tosave)
                     print(f"Saved contacts to {save_fname}")
+                saved_contacts = True
                 if not args.record_video:
                     break
                 
@@ -500,5 +501,6 @@ if __name__ == "__main__":
                     print(f"Saved video to {video_fname}")
                 else:
                     print("No frames recorded, skipping video save")
+                break
     exit()
 
