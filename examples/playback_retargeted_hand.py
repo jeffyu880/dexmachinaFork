@@ -30,7 +30,31 @@ def set_entities_to_step(hand_entities, retargeter_results, step, device):
         hand.set_dofs_position(position=hand_qpos, dofs_idx_local=joint_idxs)
     return 
 
-def create_scene(args, object_name, urdfs):
+def set_init_object_states(obj, obj_pos, obj_quat, obj_arti, joint_only=False):
+    """ demo_data: dict of shape (num_demo_step, k) """   
+    print(f"Initial object states:")
+    print(f"  obj_pos shape: {obj_pos.shape}, first: {obj_pos[0]}")
+    print(f"  obj_quat shape: {obj_quat.shape}, first: {obj_quat[0]}")
+    print(f"  obj_arti shape: {obj_arti.shape}, first: {obj_arti[0]}")
+    num_demo_steps = obj_pos.shape[0]
+    env_idxs = [i for i in range(obj.num_envs)]   
+    if joint_only:
+        obj.entity.set_dofs_position(position=obj_arti, dofs_idx_local=obj.dof_idxs, zero_velocity=True, envs_idx=env_idxs)
+        return 
+    obj.set_object_state(
+        root_pos=obj_pos,
+        root_quat=obj_quat,
+        joint_qpos=obj_arti,
+        env_idxs=env_idxs
+    )
+
+def get_obj_demo_tensors(demo_data, device=torch.device("cuda")):
+    obj_pos = torch.tensor(demo_data['obj_pos'], device=device)
+    obj_quat = torch.tensor(demo_data['obj_quat'], device=device)
+    obj_arti = torch.tensor(demo_data['obj_arti'], device=device)[:, None] # shape (num_demo_steps, 1)
+    return obj_pos, obj_quat, obj_arti
+
+def create_scene(args, object_name, urdfs, demo_data):
     import genesis as gs
     gs.init(backend=gs.gpu)
     scene_cfg = dict(
@@ -77,6 +101,9 @@ def create_scene(args, object_name, urdfs):
     scene = gs.Scene(**scene_cfg)
     device = torch.device('cuda:0')
     
+    # Add ground plane
+    ground = scene.add_entity(gs.morphs.URDF(file=plane_urdf, fixed=True))
+    
     cam = None 
     if args.save_video:
         if args.raytrace:
@@ -119,8 +146,7 @@ def create_scene(args, object_name, urdfs):
         ),
     ) 
 
-    print(object_name)
-    obj_cfg = get_arctic_object_cfg(object_name)
+    obj_cfg = get_arctic_object_cfg(object_name, convexify=False)
     obj_cfg['fixed'] = False
     obj_cfg['disable_collision'] = False
     obj_cfg['color'] = (1.0, 0.423, 0.039, 0.3)
@@ -139,14 +165,29 @@ def main(args):
         urdf_path = config[side]['urdf_path']
         urdfs[side] = join(robot_dir, urdf_path)  
 
-    scene, hand_entities, obj, cam = create_scene(args, args.obj_name, urdfs)
-
-    device = torch.device('cuda:0')
-
+    # get path to retargeted demonstration and load demo_data
     assert os.path.exists(args.load_fname), f"load_fname={args.load_fname} does not exist"
     subject_name = args.load_fname.split("/")[-2]
     hand_name = args.hand if 'hand' in args.hand else f"{args.hand}_hand"
     retarget_type = 'position' if hand_name == 'shadow_hand' else 'vector'
+    
+    # Construct path to saved .pt file from parallel_retarget
+    traj_name = args.load_fname.split("/")[-1].replace(".npy", "")
+    save_fname = f"dexmachina/assets/retargeted/{hand_name}/{subject_name}/{traj_name}_{retarget_type}_para.pt"
+    
+    if os.path.exists(save_fname):
+        loaded_data = torch.load(save_fname, weights_only=False)
+        demo_data = loaded_data.get('demo_data', {})
+        print(f"Loaded demo_data from {save_fname}")
+    else:
+        raise FileNotFoundError(f"Retargeted file not found: {save_fname}. Run parallel_retarget.py first with --save flag.")
+    
+    # create the manipulation scene
+    scene, hand_entities, obj, cam = create_scene(args, args.obj_name, urdfs, demo_data)
+
+    device = torch.device('cuda:0')
+
+    # Load retargeter results
     retarget_fname = join(
         f"dexmachina/assets/retargeter_results/{hand_name}/{subject_name}", 
         args.load_fname.split("/")[-1].replace(".npy", f"_{retarget_type}.npy")
@@ -157,6 +198,14 @@ def main(args):
     scene.build(n_envs=num_envs, env_spacing=(2.0, 2.0))
     scene.reset()
     
+    # Now set initial object states after scene is built (use first frame only)
+    obj_pos, obj_quat, obj_arti = get_obj_demo_tensors(demo_data, device=device)
+    # Only use first frame since we have 1 environment
+    obj_pos_init = obj_pos[0:1]  # shape (1, 3)
+    obj_quat_init = obj_quat[0:1]  # shape (1, 4)
+    obj_arti_init = obj_arti[0:1]  # shape (1, 1)
+    set_init_object_states(obj, obj_pos_init, obj_quat_init, obj_arti_init, joint_only=False)
+    
     # Setup video directory if recording
     video_dir = None
     if args.save_video:
@@ -165,11 +214,23 @@ def main(args):
         print(f"Will save video frames to {video_dir}")
     
     # Get number of frames
-    num_steps = retargeter_results['left']["hand_qpos"].shape[0]
-    print(f"Total frames to playback: {num_steps}")
+    total_frames = retargeter_results['left']["hand_qpos"].shape[0]
+    
+    # Parse frames argument
+    if args.frames:
+        parts = args.frames.split('-')
+        start_frame = int(parts[0])
+        end_frame = int(parts[1])
+    else:
+        start_frame = 0
+        end_frame = total_frames
+    
+    num_steps = end_frame - start_frame
+    print(f"Total frames available: {total_frames}")
+    print(f"Playback range: {start_frame} to {end_frame} ({num_steps} frames)")
     
     # Main playback loop
-    step = 0
+    step = start_frame
     frame_delay = 1.0 / args.playback_fps
     last_frame_time = time.time()
     
@@ -177,17 +238,24 @@ def main(args):
     
     try:
         while True:
-            if step >= num_steps:
-                step = 0
+            if step >= end_frame:
+                step = start_frame
                 scene.reset()
                 if obj:
                     obj.post_scene_build_setup()
-                print("Looping back to start...")
+                    # Now set initial object states after scene is built (use first frame only)
+                    obj_pos, obj_quat, obj_arti = get_obj_demo_tensors(demo_data, device=device)
+                    # Only use first frame since we have 1 environment
+                    obj_pos_init = obj_pos[0:1]  # shape (1, 3)
+                    obj_quat_init = obj_quat[0:1]  # shape (1, 4)
+                    obj_arti_init = obj_arti[0:1]  # shape (1, 1)
+                    set_init_object_states(obj, obj_pos_init, obj_quat_init, obj_arti_init, joint_only=False)
+                print(f"Looping back to frame {start_frame}...")
             
-            set_entities_to_step(hand_entities, retargeter_results, step, device) 
+            set_entities_to_step(hand_entities, retargeter_results, step, device)
             
-            # Print hand z position for first step
-            if step == 0:
+            # Print hand z position for first step in range
+            if step == start_frame:
                 for side, hand in hand_entities.items():
                     hand_pos = hand.get_links_pos()[0, 0, :]  # Get root link position (x, y, z) for env 0
                     print(f"[Step {step}] {side.capitalize()} hand root z position: {hand_pos[2]:.4f}")
@@ -237,6 +305,7 @@ if __name__ == "__main__":
     parser.add_argument('--save_video', action='store_true', help='Save camera frames to video')
     parser.add_argument('--video_dir', type=str, default='videos', help='Directory to save video frames')
     parser.add_argument('--raytrace', action='store_true', help='Whether to use raytracer')
+    parser.add_argument('--frames', type=str, default=None, help='Frame range for playback (e.g., "30-130")')
     args = parser.parse_args()
 
     
