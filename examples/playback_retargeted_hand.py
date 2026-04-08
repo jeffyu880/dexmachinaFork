@@ -68,7 +68,7 @@ def create_scene(args, object_name, urdfs, demo_data):
             enable_joint_limit=True,
         ),
         show_viewer=args.vis,
-        use_visualizer=(args.vis or args.save_video),
+        use_visualizer=(args.vis or args.record_video),
         show_FPS=False,
         vis_options = gs.options.VisOptions( 
             plane_reflection = True,
@@ -105,7 +105,7 @@ def create_scene(args, object_name, urdfs, demo_data):
     ground = scene.add_entity(gs.morphs.URDF(file=plane_urdf, fixed=True))
     
     cam = None 
-    if args.save_video:
+    if args.record_video:
         if args.raytrace:
             cam = scene.add_camera(
             pos=scene_cfg['viewer_options'].camera_pos, lookat=scene_cfg['viewer_options'].camera_lookat,
@@ -206,12 +206,9 @@ def main(args):
     obj_arti_init = obj_arti[0:1]  # shape (1, 1)
     set_init_object_states(obj, obj_pos_init, obj_quat_init, obj_arti_init, joint_only=False)
     
-    # Setup video directory if recording
-    video_dir = None
-    if args.save_video:
-        video_dir = Path(args.video_dir)
-        video_dir.mkdir(parents=True, exist_ok=True)
-        print(f"Will save video frames to {video_dir}")
+    # Setup video collection if recording
+    if args.record_video:
+        print(f"Will collect frames for MP4 video output")
     
     # Get number of frames
     total_frames = retargeter_results['left']["hand_qpos"].shape[0]
@@ -239,6 +236,9 @@ def main(args):
         'obj_state': [],     # actual object state during playback
         'demo_state': [],    # ground truth demonstration state
     }
+    
+    # Initialize frame collection for video
+    frames = []
     
     # Get demo data tensors
     obj_pos, obj_quat, obj_arti = get_obj_demo_tensors(demo_data, device=device)
@@ -280,8 +280,8 @@ def main(args):
             
             scene.step()
             
-            # Render and save camera frame if recording
-            if args.save_video and cam:
+            # Render and collect camera frame if recording
+            if args.record_video and cam:
                 render_result = cam.render()
                 # Handle variable number of returns from cam.render()
                 if isinstance(render_result, tuple):
@@ -295,10 +295,8 @@ def main(args):
                 else:
                     rgb_np = rgb[0].astype(np.uint8) if len(rgb.shape) > 3 else rgb.astype(np.uint8)
                 
-                # OpenCV expects BGR, convert from RGB
-                bgr_np = cv2.cvtColor(rgb_np, cv2.COLOR_RGB2BGR)
-                frame_path = video_dir / f"frame_{step:06d}.png"
-                cv2.imwrite(str(frame_path), bgr_np)
+                # Collect frame (keep in RGB, will convert to BGR when saving)
+                frames.append(rgb_np)
             
             step += 1
             if step == end_frame:
@@ -313,6 +311,30 @@ def main(args):
     
     except KeyboardInterrupt:
         print("\nPlayback stopped.")
+    
+    # Save video from collected frames
+    if args.record_video and len(frames) > 0:
+        import cv2
+        fps = int(1 / (1/60) / 2)  # Approximate frame rate (half of simulation step rate)
+        frame_height, frame_width = frames[0].shape[:2]
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        
+        # Create video directory if needed
+        video_dir = Path(args.video_dir)
+        video_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create video file path
+        video_fname = video_dir / f"{args.hand}_kinematic_retargeting_{args.obj_name}_{start_frame}_{end_frame}.mp4"
+        out = cv2.VideoWriter(str(video_fname), fourcc, fps, (frame_width, frame_height))
+        
+        for frame in frames:
+            # Convert RGB to BGR for OpenCV
+            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            out.write(frame_bgr)
+        out.release()
+        print(f"Saved video to {video_fname}")
+    elif args.record_video:
+        print("No frames recorded, skipping video save")
     
     # Save playback trajectory to .npy file
     playback_trajectory = {
@@ -342,7 +364,7 @@ if __name__ == "__main__":
     parser.add_argument('--retarget_name', type=str, default='para', help='Retargeting save name')
     parser.add_argument('--vis', action='store_true', help='Show viewer')
     parser.add_argument('--playback_fps', type=float, default=30, help='Playback FPS')
-    parser.add_argument('--save_video', action='store_true', help='Save camera frames to video')
+    parser.add_argument('--record_video', action='store_true', help='Save camera frames to video')
     parser.add_argument('--video_dir', type=str, default='videos', help='Directory to save video frames')
     parser.add_argument('--raytrace', action='store_true', help='Whether to use raytracer')
     parser.add_argument('--frames', type=str, default=None, help='Frame range for playback (e.g., "30-130")')
