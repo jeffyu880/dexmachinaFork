@@ -234,25 +234,43 @@ def main(args):
     frame_delay = 1.0 / args.playback_fps
     last_frame_time = time.time()
     
+    # Collect playback trajectory
+    playback_trajectory = {
+        'obj_state': [],     # actual object state during playback
+        'demo_state': [],    # ground truth demonstration state
+    }
+    
+    # Get demo data tensors
+    obj_pos, obj_quat, obj_arti = get_obj_demo_tensors(demo_data, device=device)
+    
     print("Starting playback... Press Ctrl+C to stop")
     
     try:
         while True:
-            if step >= end_frame:
-                step = start_frame
-                scene.reset()
-                if obj:
-                    obj.post_scene_build_setup()
-                    # Now set initial object states after scene is built (use first frame only)
-                    obj_pos, obj_quat, obj_arti = get_obj_demo_tensors(demo_data, device=device)
-                    # Only use first frame since we have 1 environment
-                    obj_pos_init = obj_pos[0:1]  # shape (1, 3)
-                    obj_quat_init = obj_quat[0:1]  # shape (1, 4)
-                    obj_arti_init = obj_arti[0:1]  # shape (1, 1)
-                    set_init_object_states(obj, obj_pos_init, obj_quat_init, obj_arti_init, joint_only=False)
-                print(f"Looping back to frame {start_frame}...")
+            # if step >= end_frame:
+                # step = start_frame
+                # scene.reset()
+                # if obj:
+                #     obj.post_scene_build_setup()
+                #     # Now set initial object states after scene is built (use first frame only)
+                #     obj_pos, obj_quat, obj_arti = get_obj_demo_tensors(demo_data, device=device)
+                #     # Only use first frame since we have 1 environment
+                #     obj_pos_init = obj_pos[0:1]  # shape (1, 3)
+                #     obj_quat_init = obj_quat[0:1]  # shape (1, 4)
+                #     obj_arti_init = obj_arti[0:1]  # shape (1, 1)
+                #     set_init_object_states(obj, obj_pos_init, obj_quat_init, obj_arti_init, joint_only=False)
+                # print(f"Looping back to frame {start_frame}...")
             
             set_entities_to_step(hand_entities, retargeter_results, step, device)
+            
+            # Collect object state at this step
+            obj.update_value_buffers()
+            obj_state = np.concatenate([obj.root_pos[0].cpu().numpy(), obj.root_quat[0].cpu().numpy(), obj.dof_pos[0].cpu().numpy()])
+            playback_trajectory['obj_state'].append(obj_state)
+            
+            # Get demo state at this step (ground truth)
+            demo_state = np.concatenate([obj_pos[step].cpu().numpy(), obj_quat[step].cpu().numpy(), obj_arti[step].cpu().numpy().flatten()])
+            playback_trajectory['demo_state'].append(demo_state)
             
             # Print hand z position for first step in range
             if step == start_frame:
@@ -283,6 +301,8 @@ def main(args):
                 cv2.imwrite(str(frame_path), bgr_np)
             
             step += 1
+            if step == end_frame:
+                break
             
             # Frame rate control
             elapsed = time.time() - last_frame_time
@@ -293,6 +313,26 @@ def main(args):
     
     except KeyboardInterrupt:
         print("\nPlayback stopped.")
+    
+    # Save playback trajectory to .npy file
+    playback_trajectory = {
+        'obj_state': np.array(playback_trajectory['obj_state']),     # shape (T, 8)
+        'demo_state': np.array(playback_trajectory['demo_state']),   # shape (T, 8)
+    }
+    
+    # Extract use_clip number from traj_name (e.g., "ketchup_use_01" -> "01")
+    use_clip = traj_name.split("_use_")[-1] if "_use_" in traj_name else "unknown"
+    
+    # Create output directory structure: kinematic_playback/{hand_name}/{subject_name}/
+    output_base_dir = "/home/jeffrey/Documents/Manipulation/Genesis/dexmachina/dexmachina/assets/kinematic_playback"
+    hand_folder = os.path.join(output_base_dir, args.hand, subject_name)
+    os.makedirs(hand_folder, exist_ok=True)
+    
+    output_fname = os.path.join(hand_folder, f"playback_{args.obj_name}_use_{use_clip}_{start_frame}_{end_frame}.npy")
+    np.save(output_fname, playback_trajectory)
+    print(f"\nSaved playback trajectory to {output_fname}")
+    print(f"  obj_state shape: {playback_trajectory['obj_state'].shape}")
+    print(f"  demo_state shape: {playback_trajectory['demo_state'].shape}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Playback retargeted hand animation")
