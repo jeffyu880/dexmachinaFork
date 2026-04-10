@@ -49,86 +49,13 @@ def dump_yaml(filename: str, data: dict | object, sort_keys: bool = False):
     with open(filename, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=sort_keys)
 
-
-def concat_data(data_list):
-    """Concatenate multiple data dictionaries along time axis (axis 0)."""
-    if not data_list:
-        return {}
-    
-    result = {}
-    first_data = data_list[0]
-    
-    for key in first_data.keys():
-        values_to_concat = []
-        for data in data_list:
-            if key in data:
-                val = data[key]
-                if isinstance(val, torch.Tensor):
-                    values_to_concat.append(val)
-                elif isinstance(val, np.ndarray):
-                    values_to_concat.append(torch.from_numpy(val))
-                elif isinstance(val, dict):
-                    # Recursively handle nested dicts
-                    nested_list = [d[key] for d in data_list if key in d]
-                    values_to_concat.append(concat_data(nested_list))
-        
-        if values_to_concat and isinstance(values_to_concat[0], torch.Tensor):
-            result[key] = torch.cat(values_to_concat, dim=0)
-        elif values_to_concat and isinstance(values_to_concat[0], dict):
-            result[key] = values_to_concat[0]  # Use first dict (same for all)
-        else:
-            result[key] = values_to_concat[0] if values_to_concat else first_data[key]
-    
-    return result
-
-
-class UniformDemoSamplingWrapper:
-    """
-    Wrapper to enable uniform random sampling of demonstrations during training.
-    
-    Maintains a list of demos and randomly selects one for each environment reset,
-    ensuring the agent is trained on diverse demonstrations uniformly.
-    """
-    def __init__(self, all_demo_data, all_retarget_data, seed=None):
-        """
-        Args:
-            all_demo_data: List of demo data dictionaries
-            all_retarget_data: List of retarget data dictionaries  
-            seed: Random seed for reproducibility (optional)
-        """
-        self.all_demo_data = all_demo_data
-        self.all_retarget_data = all_retarget_data
-        self.num_demos = len(all_demo_data)
-        
-        if seed is not None:
-            np.random.seed(seed)
-        
-        print(f"[INFO] UniformDemoSamplingWrapper initialized with {self.num_demos} demos")
-        print(f"[INFO] Demos will be uniformly sampled during training")
-    
-    def sample_demo(self):
-        """Uniformly sample and return a demo pair (demo_data, retarget_data)"""
-        idx = np.random.randint(0, self.num_demos)
-        return self.all_demo_data[idx], self.all_retarget_data[idx], idx
-    
-    def get_env_kwargs_with_sampled_demo(self, base_env_kwargs):
-        """
-        Create a copy of env_kwargs with a uniformly sampled demo.
-        Returns: (env_kwargs_copy, demo_idx)
-        """
-        demo_data, retarget_data, idx = self.sample_demo()
-        env_kwargs = base_env_kwargs.copy()
-        env_kwargs['demo_data'] = demo_data
-        env_kwargs['retarget_data'] = retarget_data
-        return env_kwargs, idx
-
-
 def load_multi_demo_data_separate(clip_list, args, device):
-    """Load multiple demonstration clips separately (for uniform random sampling during training)."""
+    """Load multiple demonstration clips separately."""
     all_demo_data = []
     all_retarget_data = []
+    base_env_cfg = None
     
-    print(f"\n[INFO] Loading {len(clip_list)} demonstrations (separate, for uniform sampling)...")
+    print(f"\n[INFO] Loading {len(clip_list)} demonstrations (separate)...")
     for i, clip in enumerate(clip_list, 1):
         print(f"  [{i}] Loading {clip}...")
         
@@ -136,12 +63,18 @@ def load_multi_demo_data_separate(clip_list, args, device):
         obj_name, start, end, subject_name, use_clip = parse_clip_string(clip)
         
         # Set args for this clip
+        args.clip = clip
         args.arctic_object = obj_name
         args.frame_start = start
         args.frame_end = end
         
         # Load data for this clip
         env_cfg = get_all_env_cfg(args, device=device)
+        
+        # Save base environment config from first clip (contains robot_cfgs, object_cfgs, reward_cfg, etc.)
+        if base_env_cfg is None:
+            base_env_cfg = {k: v for k, v in env_cfg.items() if k not in ['demo_data', 'retarget_data']}
+        
         demo_data = env_cfg['demo_data']
         retarget_data = env_cfg['retarget_data']
         
@@ -152,21 +85,21 @@ def load_multi_demo_data_separate(clip_list, args, device):
         print(f"       Loaded {num_frames} frames")
     
     print(f"[INFO] Loaded {len(all_demo_data)} separate demonstrations")
-    print(f"[INFO] Will uniformly sample demos during training")
+    print(f"[INFO] Demos loaded for epoch-level sampling")
     
-    return all_demo_data, all_retarget_data
+    return all_demo_data, all_retarget_data, base_env_cfg
 
 
 def main():
     parser = get_common_argparser() 
     # now add RL training args 
     parser.add_argument("--exp_name", "-exp", type=str, default="multi_demo", help="Experiment name.") 
-    parser.add_argument("--clips", nargs='+', required=True, help="List of demonstration clips (e.g., 'box-0-100 ketchup-0-100')")
+    parser.add_argument("--clips", nargs='+', required=True, help="List of demonstration clips (e.g., 'ketchup-0-100-s01-u01 ketchup-0-100-s01-u02')")
     parser.add_argument("--horizon", '-ho', type=int, default=16, help="Number of steps per environment.")
     parser.add_argument("--checkpoint", '-ck', type=str, default=None, help="Checkpoint file to load.")
     parser.add_argument("--learning_rate", "-lr", type=float, default=0.0003, help="Learning rate for the agent.") 
     parser.add_argument("--wandb_project", "-wp", type=str, default="dexmachina", help="WandB project name.")
-    parser.add_argument("--save_freq", "-sf", type=int, default=1000)
+    parser.add_argument("--save_freq", "-sf", type=int, default=500)
     args = parser.parse_args()
 
     # Generate simplified experiment name: task_name_combined_MMDD_HHMMSS
@@ -185,11 +118,9 @@ def main():
     num_envs = args.num_envs   
     
     # Load multiple demonstrations
-    if args.uniform_demo_sampling:
-        # Load separately for uniform random sampling during training
-        all_demo_data, all_retarget_data = load_multi_demo_data_separate(args.clips, args, 'cuda:0')
-        demo_data = all_demo_data
-        retarget_data = all_retarget_data
+    all_demo_data, all_retarget_data, base_env_cfg = load_multi_demo_data_separate(args.clips, args, 'cuda:0')
+    demo_data = all_demo_data
+    retarget_data = all_retarget_data
     
     # Prepare demo info for logging
     demo_info_lines = [
@@ -222,29 +153,51 @@ def main():
     ])
     
     # Prepare environment kwargs
+    initial_demo_idx = 0
+    
+    # Properly merge env_cfg: keep the original and selectively update with relevant args
+    merged_env_cfg = base_env_cfg['env_cfg'].copy()  # Start with original env_cfg
+    merged_env_cfg['use_rl_games'] = True
+    
+    # Only update with env-related args, not training-specific ones
+    env_arg_keys = {
+        'arctic_object', 'hand', 'frame_start', 'frame_end', 'clip',
+        'num_envs', 'vis', 'overlay', 'seed', 'action_mode',
+        'early_reset_threshold', 'aux_reset_thres', 'record_video',
+        'render_camera', 'raytrace', 'observe_tip_dist', 'observe_contact_force',
+        'task_rew_betas', 'action_penalty', 'imi_rew_weight', 'contact_rew_weight',
+        'bc_rew_weight', 'contact_beta', 'kp', 'kv', 'force_range', 'show_markers',
+        'actuate_object', 'retarget_name', 'actuated_rigid', 'chunk_ep_length',
+    }
+    for key in env_arg_keys:
+        if hasattr(args, key) and getattr(args, key) is not None:
+            merged_env_cfg[key] = getattr(args, key)
+    
     env_kwargs = {
-        'env_cfg': {
-            'use_rl_games': True,
-            **args.__dict__,
-        },
-        'demo_data': demo_data if not args.uniform_demo_sampling else demo_data[0],
-        'retarget_data': retarget_data if not args.uniform_demo_sampling else retarget_data[0],
+        **base_env_cfg,  # Contains robot_cfgs, object_cfgs, reward_cfg, etc.
+        'env_cfg': merged_env_cfg,
+        'demo_data': demo_data[initial_demo_idx],  # Initial demo for setup
+        'retarget_data': retarget_data[initial_demo_idx],  # Initial retarget for setup
+        'all_demo_data': demo_data,  # All demos for reset-time sampling
+        'all_retarget_data': retarget_data,  # All retargets for reset-time sampling
     }
     
-    # Initialize demo sampler if using uniform sampling
-    demo_sampler = None
-    if args.uniform_demo_sampling:
-        demo_sampler = UniformDemoSamplingWrapper(demo_data, retarget_data, seed=args.seed)
-        # Sample one for initialization
-        sampled_env_kwargs, demo_idx = demo_sampler.get_env_kwargs_with_sampled_demo(env_kwargs)
-        env_kwargs = sampled_env_kwargs
-        print(f"[INFO] Initialized with demo index: {demo_idx}")
+    print(f"\n[DEBUG] env_cfg use_rl_games: {merged_env_cfg.get('use_rl_games', 'NOT SET')}")
     
     device = torch.device('cuda:0')
     import genesis as gs
     gs.init(backend=gs.gpu, logging_level='warning')
     
-    env = BaseEnv(**env_kwargs)
+    base_env = BaseEnv(**env_kwargs)
+    
+    print(f"[DEBUG] base_env.use_curriculum={base_env.use_curriculum}")
+    print(f"[DEBUG] base_env.n_objects={base_env.n_objects}")
+    if base_env.n_objects > 0:
+        print(f"[DEBUG] object.actuated={base_env.object.actuated}")
+
+    
+    # Now wrap the base environment for RL-Games
+    env = base_env
     
     agent_cfg_fname = get_rl_config_path("rl_games_ppo_cfg")
     with open(agent_cfg_fname, encoding="utf-8") as f:
@@ -334,6 +287,7 @@ def main():
     print(f"\n{'='*80}")
     print(f"Starting training with {len(args.clips)} demonstrations")
     print(f"Experiment: {exp_name}")
+    print(f"Demo switching: On each episode reset (random sampling)")
     print(f"Demo info saved to: {demo_info_path}")
     print("="*80)
     print("\n".join(demo_info_lines))

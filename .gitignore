@@ -1,7 +1,16 @@
 dexmachina/hand_proc/retargeted
 logs/
 wandb/
-  
+*.json
+*.mp4
+*.png
+*.pth 
+training_params*.txt
+*.stl
+izar_logs/
+*.npy
+*.pt
+dexmachina_main_results_data/ 
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
