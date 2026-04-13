@@ -3,9 +3,9 @@ PARAM_FILE="training_params_$(date +%Y%m%d_%H%M%S).txt"
 
 # Define parameters once as associative arrays
 declare -A PARAMS=(
-    [batch_size]="-B 2048"      # should be the num_envs
-    [epochs]="-obf -obt --max_epochs 5000"
-    [object]="--actuate_object --retarget_name para --horizon 32"
+    [batch_size]="-B 2"      # should be the num_envs
+    [epochs]="-obf -obt --max_epochs 5"
+    [object]="--actuate_object --retarget_name para --horizon 32"       # horizon is the number of env steps collected per actor before each PPO update cycle
     [learning]="-imw 0.5 --learning_rate 0.0003"
     [curriculum]="--gain_mode all --curr_schedule uniform --wait_epochs 200 --num_zero_epoch 500"
     [gains]="--fixed_mode uniform --uniform_mode slow --group_collisions"
@@ -25,6 +25,7 @@ declare -A PARAMS=(
 # Build the training command once so we can log and execute the exact same args.
 CMD=(
     python dexmachina/rl/train_rl_games.py
+    # --vis
     ${PARAMS[batch_size]} ${PARAMS[epochs]}
     ${PARAMS[object]}
     ${PARAMS[learning]}

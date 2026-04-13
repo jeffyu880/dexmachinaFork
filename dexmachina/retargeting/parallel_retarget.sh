@@ -22,14 +22,14 @@ echo "Using hand: $HAND"
 # Array of demonstrations with their sequences and user numbers
 demonstrations=(
     # "s01:2"
-    # "s02:1,2,3,4"
+    # "s02:2"
     # "s04:2"
     # "s05:1"
     # "s06:1,2"
     # "s07:2"
-    "s08:3,4"
-    "s09:1,2,3,4"
-    "s10:1,2"
+    "s08:3"
+    "s09:2"
+    # "s10:1,2"
 )
 
 # Convert to zero-padded format (e.g., 1 -> 01, 2 -> 02)
@@ -60,22 +60,29 @@ for demo in "${demonstrations[@]}"; do
         echo "=========================================="
         
         # Retry loop up to 20 times until "Saved data to" is found
-        max_attempts=20
+        max_attempts=50
         attempt=1
         success=false
         
         while [ $attempt -le $max_attempts ]; do
             echo "Attempt $attempt/$max_attempts"
             
-            output=$(python retargeting/parallel_retarget.py \
+            # Stream output live to console and also capture it for success detection.
+            tmp_output=$(mktemp)
+            python retargeting/parallel_retarget.py \
                 --clip "$CLIP" \
                 --hand "$HAND" \
                 --control_steps "$CONTROL_STEPS" \
                 --save_name "$SAVE_NAME" \
                 --save \
-                -ow 2>&1)
-            
-            echo "$output"
+                -ow 2>&1 | tee "$tmp_output"
+            cmd_status=${PIPESTATUS[0]}
+            output=$(cat "$tmp_output")
+            rm -f "$tmp_output"
+
+            if [ $cmd_status -ne 0 ]; then
+                echo "Python command exited with status: $cmd_status"
+            fi
             
             if echo "$output" | grep -q "Saved data to"; then
                 echo "✓ Completed: $CLIP"

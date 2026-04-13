@@ -157,8 +157,8 @@ def find_closest_link(contact_points, joint_points):
         avg_contact_positions[idx] = np.concatenate([weighted_avg_position, [voted_part_id]])
     return avg_contact_positions 
 
-path_mean_r = "assets/mano_hand/right_pose_mean.txt"
-path_mean_l = "assets/mano_hand/left_pose_mean.txt"
+path_mean_r = "../assets/mano_hand/right_pose_mean.txt"
+path_mean_l = "../assets/mano_hand/left_pose_mean.txt"
 pose_mean_r = np.loadtxt(path_mean_r, dtype=np.float32)
 pose_mean_l = np.loadtxt(path_mean_l, dtype=np.float32)
 
@@ -317,7 +317,7 @@ os.makedirs(save_folder, exist_ok=True)
 save_fname = f"{save_folder}/{filename}"  
 if os.path.exists(save_fname) and args.save and not args.overwrite:
     print("WARNING -", f"{save_fname} already exists, overwrite?")
-    breakpoint()
+    # breakpoint()
 if args.save:
     np.save(save_fname, tosave)
 # try loading

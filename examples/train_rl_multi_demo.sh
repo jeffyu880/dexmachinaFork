@@ -26,9 +26,9 @@ PARAM_FILE="training_params_multi_demo_$(date +%Y%m%d_%H%M%S).txt"
 
 # Define parameters once as associative arrays
 declare -A PARAMS=(
-    [batch_size]="-B 2"      # should be the num_envs
-    [epochs]="-obf -obt --max_epochs 5"
-    [object]="--actuate_object --retarget_name para --horizon 32 --chunk_ep_length 32 --rand_init_ratio 0.5"
+    [batch_size]="-B 1"      # should be the num_envs
+    [epochs]="-obf -obt --max_epochs 10"
+    [object]="--actuate_object --retarget_name para --horizon 32"
     [learning]="-imw 0.5 --learning_rate 0.0003"
     [curriculum]="--gain_mode all --curr_schedule uniform --wait_epochs 200 --num_zero_epoch 500"
     [gains]="--fixed_mode uniform --uniform_mode slow --group_collisions"
@@ -41,13 +41,14 @@ declare -A PARAMS=(
     [experiment]="-exp allegro-multi-demo"
     [hand]="--hand allegro_hand"
     [seed]="--seed 24"
+    [sampling]="--demo_sampling deterministic"
     # [checkpoint]="--checkpoint /path/to/your/checkpoint.pth"
 )
 
 # Multiple demo clips for training.
 # Format: object-start-end[-subject][-use_clip]
 DEMOS=(
-    "box-30-130-s01-u01"
+    "ketchup-427-527-s02-u01"
     "ketchup-30-130-s01-u01"
 )
 
@@ -69,6 +70,7 @@ CMD=(
     ${PARAMS[experiment]}
     ${PARAMS[hand]}
     ${PARAMS[seed]}
+    ${PARAMS[sampling]}
     --clips "${DEMOS[@]}"
     # ${PARAMS[checkpoint]}
 )
@@ -105,12 +107,12 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     echo "Time: $(date)"
     echo "=========================================="
     
-    # Run training and capture output
-    OUTPUT=$("${CMD[@]}" 2>&1)
-    EXIT_CODE=$?
-    
-    # Print output
-    echo "$OUTPUT"
+    # Run training with live output and capture log for post-run checks
+    ATTEMPT_LOG="$(mktemp)"
+    "${CMD[@]}" 2>&1 | tee "$ATTEMPT_LOG"
+    EXIT_CODE=${PIPESTATUS[0]}
+    OUTPUT="$(cat "$ATTEMPT_LOG")"
+    rm -f "$ATTEMPT_LOG"
     
     # Check for errors
     ERROR_FOUND=false

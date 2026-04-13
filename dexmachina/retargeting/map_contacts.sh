@@ -19,13 +19,13 @@ echo "Using hand: $HAND"
 
 # Array of demonstrations with their sequences and user numbers
 demonstrations=(
-    "s01:2"
-    # "s02:1,2,3,4"
+    # "s01:2"
+    # "s02:1,3,4"
     # "s04:2"
     # "s05:1"
     # "s06:1,2"
     # "s07:2"
-    # "s08:1,2,3,4"
+    "s08:3"
     # "s09:1,2,3,4"
     # "s10:1,2"
 )
@@ -65,19 +65,41 @@ for demo in "${demonstrations[@]}"; do
             continue
         fi
         
-        # Run map contacts
-        python retargeting/map_contacts.py \
-            --hand "$HAND" \
-            --load_fname "$FNAME"
-        
-        if [ $? -eq 0 ]; then
-            echo "✓ Completed: $FNAME"
-        else
-            echo "✗ Failed: $FNAME"
+        # Retry map contacts up to 20 times if command fails
+        max_attempts=50
+        attempt=1
+        success=false
+
+        while [ $attempt -le $max_attempts ]; do
+            echo "Attempt $attempt/$max_attempts"
+
+            python retargeting/map_contacts.py \
+                --hand "$HAND" \
+                --load_fname "$FNAME" \
+                --record_video \
+                --num_markers 30
+
+            if [ $? -eq 0 ]; then
+                echo "✓ Completed: $FNAME"
+                success=true
+                break
+            else
+                echo "✗ Attempt $attempt failed: $FNAME"
+                if [ $attempt -lt $max_attempts ]; then
+                    echo "Waiting 15 seconds before retry..."
+                    sleep 15
+                fi
+            fi
+
+            attempt=$((attempt + 1))
+        done
+
+        if [ "$success" = false ]; then
+            echo "✗ Failed after $max_attempts attempts: $FNAME"
         fi
         
-        echo "Waiting 10 seconds before next run..."
-        sleep 10
+        echo "Waiting 15 seconds before next run..."
+        sleep 15
         echo ""
     done
 done
