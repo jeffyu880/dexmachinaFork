@@ -138,6 +138,7 @@ def get_env_cfg(
         'use_rl_games': True,
         "is_eval": False, 
         "rand_init_ratio": 0.0, # randomize initial states  
+        "demo_sampling": "random",  # random or deterministic (round-robin)
         "env_spacing": ENV_SPACING,
         "n_envs_per_row": None, # this will default to grid layout 
         "chunk_ep_length": -1,#chunk the episode length
@@ -168,12 +169,36 @@ class BaseEnv:
         render_figure=False,
         hide_cardbox=False, 
         postpone_build=False,
+        all_demo_data=None,  # List of all demos for reset-time sampling
+        all_retarget_data=None,  # List of all retarget data
+        all_demo_names=None,  # List of human-readable demo names for logging
     ):
         self.env_cfg = env_cfg
         self.reward_cfg = reward_cfg
         self.demo_data = demo_data
+        self.retarget_data_dict = retarget_data
         self.curr_cfg = curriculum_cfg
         self.group_collisions = group_collisions
+        
+        # Multi-demo support: store all demos for reset-time sampling
+        self.all_demo_data = all_demo_data if all_demo_data is not None else [demo_data]
+        self.all_retarget_data = all_retarget_data if all_retarget_data is not None else [retarget_data]
+        if all_demo_names is None:
+            self.all_demo_names = [f"demo_{i}" for i in range(len(self.all_demo_data))]
+        else:
+            self.all_demo_names = list(all_demo_names)
+        self.demo_log_names = [name.replace('/', '_').replace(' ', '_') for name in self.all_demo_names]
+        self.current_demo_idx = 0
+        self.demo_step_counts = [0 for _ in range(len(self.all_demo_data))]
+        self.demo_switch_counts = [0 for _ in range(len(self.all_demo_data))]
+        if len(self.demo_switch_counts) > 0:
+            self.demo_switch_counts[self.current_demo_idx] += 1
+        self.demo_rng = np.random.default_rng(env_cfg.get('seed', 0))
+        self.demo_sampling = str(env_cfg.get('demo_sampling', 'random')).lower()
+        if self.demo_sampling not in {'random', 'deterministic'}:
+            print(f"[WARN] Unknown demo_sampling={self.demo_sampling}, defaulting to random")
+            self.demo_sampling = 'random'
+        self.next_demo_idx = 0
 
         self.num_envs = env_cfg['num_envs']
         self.max_video_frames = env_cfg['max_video_frames']
@@ -585,9 +610,11 @@ class BaseEnv:
         self.randomization.on_step(self.episode_length_buf)
         self.scene.step()  
         self.episode_length_buf += 1
+        self.demo_step_counts[self.current_demo_idx] += len(self._step_env_idxs)
         # self.progress_episode_length() 
         self._compute_intermediate_values()
         
+        # Determine which envs should reset this step.
         self.reset_terminated[:], self.reset_time_outs[:] = self._get_dones() 
         self.reset_buf[:] = self.reset_terminated | self.reset_time_outs
  
@@ -605,6 +632,7 @@ class BaseEnv:
             ) 
             self.reset_buf[:] = self.reset_buf[:] | curriculm_reset
 
+        # Reset only the envs that are done; other envs continue their rollout.
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
             # only log cum. episode reward if that env_idx is DONE 
@@ -629,6 +657,11 @@ class BaseEnv:
             robot = self.robots[side]
             control_force = robot.get_control_force()
             self.extras["log"][f"{side}_control_force"] = control_force.mean().item()
+
+        self.extras["log"]["demo/current_idx"] = int(self.current_demo_idx)
+        for i, demo_name in enumerate(self.demo_log_names):
+            self.extras["log"][f"demo_steps/{demo_name}"] = float(self.demo_step_counts[i])
+            self.extras["log"][f"demo_switches/{demo_name}"] = float(self.demo_switch_counts[i])
 
         if self.record_video:
             self._render_headless()
@@ -712,8 +745,10 @@ class BaseEnv:
     def _get_dones(self):
         stepped_length = self.episode_length_buf - self.episode_start_buf
         if self.chunk_ep_length > 0:
+            # Chunked episodes: timeout is measured from episode_start_buf.
             timeout = stepped_length >= self.chunk_ep_length
         else:
+            # Standard episodes: timeout at absolute episode length.
             timeout = self.episode_length_buf >= self.max_episode_length  # returns true for end of episode
  
         timeout = timeout | self.nan_envs
@@ -726,6 +761,7 @@ class BaseEnv:
             first_obj = self.objects[self.object_names[0]]
             object_fell_off = first_obj.root_pos[:, 2] < self.table_height
         
+        # Main reset causes: timeout, object fell, or invalid (NaN) state.
         need_reset = timeout | object_fell_off | self.nan_envs
         
         if self.early_reset_threshold > 0.0:
@@ -881,7 +917,24 @@ class BaseEnv:
 
     def reset_idx(self, env_idxs=[]):
         if len(env_idxs) == 0:
-            return  
+            return
+        
+        # Sample a new demo if multiple demos are available
+        if len(self.all_demo_data) > 1:
+            if self.demo_sampling == 'deterministic':
+                new_demo_idx = int(self.next_demo_idx)
+                self.next_demo_idx = (self.next_demo_idx + 1) % len(self.all_demo_data)
+            else:
+                new_demo_idx = int(self.demo_rng.integers(0, len(self.all_demo_data)))
+            if new_demo_idx != self.current_demo_idx:
+                self.current_demo_idx = new_demo_idx
+                self.change_demo(
+                    self.all_demo_data[new_demo_idx],
+                    self.all_retarget_data[new_demo_idx],
+                    reset_envs=False,  # Don't reset yet, we'll do it below
+                    demo_idx=new_demo_idx
+                )
+        
         self.randomization.on_reset_idx(env_idxs)
         progressed = self.episode_length_buf[env_idxs] - self.episode_start_buf[env_idxs]
         progressed_avg = torch.mean(progressed.float()).item()
@@ -900,6 +953,8 @@ class BaseEnv:
             self.curriculum.update_progress(episode_rewards, self.max_achieved_length)
 
         if self.chunk_ep_length > 0:
+            # For chunked training, envs start at staggered offsets so parallel envs
+            # cover different timesteps instead of all starting from the same frame.
             self.episode_start_buf[env_idxs] = (env_idxs % self.chunk_ep_length).to(torch.int32).to(self.device)
             self.episode_length_buf[env_idxs] = self.episode_start_buf[env_idxs]
         else:
@@ -911,7 +966,8 @@ class BaseEnv:
             # num_rand = int(self.rand_init_ratio * len(env_idxs)) + 1
             # treat this as probability 
             torand = torch.rand(len(env_idxs)) <= self.rand_init_ratio
-            # randomly sample from any t within max_episode_length
+            # For selected envs, override start with a random demo timestep.
+            # This increases temporal coverage within the demonstration.
             end_t = min(self.max_achieved_length + 1, self.max_episode_length - 1)
             rand_t = torch.randint(0, end_t, (len(env_idxs),), dtype=torch.int32, device=self.device)
             ep_starts = torch.zeros(len(env_idxs), dtype=torch.int32, device=self.device)
@@ -962,6 +1018,94 @@ class BaseEnv:
             self.obs_buf[:] = self.get_observations()
         self.scene.step()
         return self.obs_buf, None #self.extras
+
+    def change_demo(self, demo_data, retarget_data, reset_envs=True, demo_idx=None):
+        """
+        Hot-swap demonstration data in the environment.
+        
+        This method updates all references to the current demo, including:
+        - Reward module demo
+        - Object reference trajectory
+        - Hand tracking targets
+        - Environment reset
+        
+        Args:
+            demo_data: New demonstration data dictionary
+            retarget_data: New retargeting data dictionary (hand joint targets)
+            reset_envs: Whether to reset all environments after demo change (default True)
+            demo_idx: Optional demo index for logging
+        """
+        self.demo_data = demo_data
+        self.retarget_data = retarget_data
+
+        # Update reward module with new demo
+        self.reward_module.load_demo(demo_data, retarget_data, self.device)
+        self.demo_length = self.reward_module.get_demo_length()
+
+        # Validate episode length vs demo length
+        if self.chunk_ep_length <= 0:
+            assert self.max_episode_length >= self.demo_length, (
+                f"Episode length {self.max_episode_length} must be >= demo length {self.demo_length}"
+            )
+
+        # Update object reference trajectory
+        if self.n_objects == 1:
+            obj = self.objects[self.object_names[0]]
+            obj.set_demo_states(demo_data)
+            obj.num_demo_frames = obj.demo_states.shape[0]
+            obj.init_pos = obj.demo_states[0, :3].clone()
+            obj.init_quat = obj.demo_states[0, 3:7].clone()
+            obj.init_qpos = obj.demo_states[0, 7:8].clone()
+
+            # Update demo DOF states if object is actuated
+            if obj.actuated and obj.post_built:
+                demo_dofs = []
+                for i in range(obj.demo_states.shape[0]):
+                    state = obj.demo_states[i]
+                    obj.set_object_state(
+                        root_pos=state[:3][None].repeat(obj.num_envs, 1),
+                        root_quat=state[3:7][None].repeat(obj.num_envs, 1),
+                        joint_qpos=state[7:8][None].repeat(obj.num_envs, 1),
+                    )
+                    dofs_pos = obj.entity.get_dofs_position()
+                    demo_dofs.append(dofs_pos[0])
+                obj.demo_dofs = torch.stack(demo_dofs, dim=0)
+
+        # Update hand tracking targets with new retargeting sequence
+        for side, robot in self.robots.items():
+            side_data = retarget_data.get(side, {})
+            
+            if 'init_qpos' in side_data:
+                robot.set_custom_init_qpos(side_data['init_qpos'])
+
+            if 'residual_qpos' in side_data:
+                qpos_targets = None
+                if robot.cfg.get("use_saved_targets", False):
+                    qpos_targets = side_data.get('qpos_targets', None)
+                    assert qpos_targets is not None, "Need qpos_targets when use_saved_targets=True"
+                robot.set_residual_qpos(
+                    num_frames=side_data['num_frames'],
+                    residual_qpos_dict=side_data['residual_qpos'],
+                    qpos_targets_dict=qpos_targets,
+                )
+                if robot.action_mode == "relative":
+                    robot.set_relative_step_size(robot.residual_qpos)
+
+            if 'limits' in side_data:
+                robot.set_custom_joint_limits(side_data['limits'])
+
+        # Reset all environments if requested
+        if reset_envs:
+            env_ids = torch.arange(self.num_envs, dtype=torch.long, device=self.device)
+            self.reset_idx(env_ids)
+
+        idx_str = f" index {demo_idx}" if demo_idx is not None else ""
+        demo_name = None
+        if demo_idx is not None and 0 <= demo_idx < len(self.all_demo_names):
+            demo_name = self.all_demo_names[demo_idx]
+            self.demo_switch_counts[demo_idx] += 1
+        name_str = f", name={demo_name}" if demo_name is not None else ""
+        print(f"[INFO] Changed demo{idx_str}{name_str} (length={self.demo_length})")
 
     def transform_vertice_frame(self, vertices, pose):
         """ transform the vertices to the object frame """
@@ -1087,7 +1231,7 @@ class BaseEnv:
 
     def set_curriculum(self, epoch_num):
         self.epoch_num = epoch_num 
-        verbose = epoch_num % 250 == 0
+        verbose = True
         reset_reward_tracker = False
         if self.use_curriculum:
             zero_gains, gains_decayed, reason = self.curriculum.set_curriculum(epoch_num)

@@ -148,6 +148,7 @@ def main():
     run = wandb.init(
         project=args.wandb_project, 
         config=wandb_cfg,
+        sync_tensorboard=True,
         monitor_gym=True,
         save_code=True,
         name=exp_name,

@@ -110,6 +110,7 @@ def get_all_env_cfg(args, device, load_retarget_data=True):
     env_cfg['use_rl_games'] = args.use_rl_games
     env_cfg['rand_init_ratio'] = args.rand_init_ratio  
     env_cfg['chunk_ep_length'] = args.chunk_ep_length
+    env_cfg['demo_sampling'] = args.demo_sampling
 
     if args.record_interval > 0 or args.record_video:
         env_cfg["record_video"] = True
@@ -298,6 +299,7 @@ def get_common_argparser():
     parser.add_argument('--is_eval', '-eval', action='store_true')
     parser.add_argument('--rand_init_ratio', '-randr', type=float, default=0.0)   
     parser.add_argument('--chunk_ep_length', '-chunk', type=int, default=-1)
+    parser.add_argument('--demo_sampling', type=str, default='random', choices=['random', 'deterministic'])
     
     parser.add_argument('--use_rand', '-rand', action='store_true')
     parser.add_argument('--rand_friction', '-rf', action='store_true')

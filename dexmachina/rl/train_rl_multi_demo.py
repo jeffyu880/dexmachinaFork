@@ -49,11 +49,25 @@ def dump_yaml(filename: str, data: dict | object, sort_keys: bool = False):
     with open(filename, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=sort_keys)
 
-def load_multi_demo_data_separate(clip_list, args, device):
+def load_multi_demo_data_separate(clip_list, args, device, exp_name, timestamp):
     """Load multiple demonstration clips separately."""
     all_demo_data = []
     all_retarget_data = []
     base_env_cfg = None
+    total_frames = 0
+
+    demo_info_lines = [
+        "=" * 80,
+        "Multi-Demonstration Training Info",
+        "=" * 80,
+        f"Experiment: {exp_name}",
+        f"Timestamp: {timestamp}",
+        f"Hand: {args.hand}",
+        f"Total demos: {len(clip_list)}",
+        "",
+        "Demonstrations used:",
+        "-" * 80,
+    ]
     
     print(f"\n[INFO] Loading {len(clip_list)} demonstrations (separate)...")
     for i, clip in enumerate(clip_list, 1):
@@ -82,12 +96,30 @@ def load_multi_demo_data_separate(clip_list, args, device):
         all_retarget_data.append(retarget_data)
         
         num_frames = int(end) - int(start)
+        total_frames += num_frames
+        demo_info_lines.append(f"{i}. {clip}")
+        demo_info_lines.append(f"   Object: {obj_name}, Frames: {start}-{end} ({num_frames} frames)")
+        demo_info_lines.append(f"   Subject: {subject_name}, Use_clip: {use_clip}")
+        demo_info_lines.append("")
         print(f"       Loaded {num_frames} frames")
     
     print(f"[INFO] Loaded {len(all_demo_data)} separate demonstrations")
     print(f"[INFO] Demos loaded for epoch-level sampling")
+    demo_info_lines.extend([
+        "-" * 80,
+        f"Total frames from all demos: {total_frames}",
+        "=" * 80,
+    ])
+
+    # Package all demo references directly into env kwargs template.
+    base_env_cfg['demo_data'] = all_demo_data[0]
+    base_env_cfg['retarget_data'] = all_retarget_data[0]
+    base_env_cfg['all_demo_data'] = all_demo_data
+    base_env_cfg['all_retarget_data'] = all_retarget_data
+    base_env_cfg['all_demo_names'] = list(clip_list)
+    print("\n" + "\n".join(demo_info_lines))
     
-    return all_demo_data, all_retarget_data, base_env_cfg
+    return all_demo_data, all_retarget_data, base_env_cfg, demo_info_lines
 
 
 def main():
@@ -118,83 +150,17 @@ def main():
     num_envs = args.num_envs   
     
     # Load multiple demonstrations
-    all_demo_data, all_retarget_data, base_env_cfg = load_multi_demo_data_separate(args.clips, args, 'cuda:0')
-    demo_data = all_demo_data
-    retarget_data = all_retarget_data
-    
-    # Prepare demo info for logging
-    demo_info_lines = [
-        "=" * 80,
-        "Multi-Demonstration Training Info",
-        "=" * 80,
-        f"Experiment: {exp_name}",
-        f"Timestamp: {timestamp}",
-        f"Hand: {args.hand}",
-        f"Total demos: {len(args.clips)}",
-        "",
-        "Demonstrations used:",
-        "-" * 80,
-    ]
-    
-    total_frames = 0
-    for i, clip in enumerate(args.clips, 1):
-        obj_name, start, end, subject, use_clip = parse_clip_string(clip)
-        num_frames = int(end) - int(start)
-        total_frames += num_frames
-        demo_info_lines.append(f"{i}. {clip}")
-        demo_info_lines.append(f"   Object: {obj_name}, Frames: {start}-{end} ({num_frames} frames)")
-        demo_info_lines.append(f"   Subject: {subject}, Use_clip: {use_clip}")
-        demo_info_lines.append("")
-    
-    demo_info_lines.extend([
-        "-" * 80,
-        f"Total frames from all demos: {total_frames}",
-        "=" * 80,
-    ])
-    
-    # Prepare environment kwargs
-    initial_demo_idx = 0
-    
-    # Properly merge env_cfg: keep the original and selectively update with relevant args
-    merged_env_cfg = base_env_cfg['env_cfg'].copy()  # Start with original env_cfg
-    merged_env_cfg['use_rl_games'] = True
-    
-    # Only update with env-related args, not training-specific ones
-    env_arg_keys = {
-        'arctic_object', 'hand', 'frame_start', 'frame_end', 'clip',
-        'num_envs', 'vis', 'overlay', 'seed', 'action_mode',
-        'early_reset_threshold', 'aux_reset_thres', 'record_video',
-        'render_camera', 'raytrace', 'observe_tip_dist', 'observe_contact_force',
-        'task_rew_betas', 'action_penalty', 'imi_rew_weight', 'contact_rew_weight',
-        'bc_rew_weight', 'contact_beta', 'kp', 'kv', 'force_range', 'show_markers',
-        'actuate_object', 'retarget_name', 'actuated_rigid', 'chunk_ep_length',
-    }
-    for key in env_arg_keys:
-        if hasattr(args, key) and getattr(args, key) is not None:
-            merged_env_cfg[key] = getattr(args, key)
-    
-    env_kwargs = {
-        **base_env_cfg,  # Contains robot_cfgs, object_cfgs, reward_cfg, etc.
-        'env_cfg': merged_env_cfg,
-        'demo_data': demo_data[initial_demo_idx],  # Initial demo for setup
-        'retarget_data': retarget_data[initial_demo_idx],  # Initial retarget for setup
-        'all_demo_data': demo_data,  # All demos for reset-time sampling
-        'all_retarget_data': retarget_data,  # All retargets for reset-time sampling
-    }
-    
-    print(f"\n[DEBUG] env_cfg use_rl_games: {merged_env_cfg.get('use_rl_games', 'NOT SET')}")
+    all_demo_data, all_retarget_data, base_env_cfg, demo_info_lines = load_multi_demo_data_separate(
+        args.clips, args, 'cuda:0', exp_name=exp_name, timestamp=timestamp
+    )
+
+    base_env_cfg['env_cfg']['use_rl_games'] = True
+    env_kwargs = base_env_cfg
     
     device = torch.device('cuda:0')
     import genesis as gs
     gs.init(backend=gs.gpu, logging_level='warning')
-    
     base_env = BaseEnv(**env_kwargs)
-    
-    print(f"[DEBUG] base_env.use_curriculum={base_env.use_curriculum}")
-    print(f"[DEBUG] base_env.n_objects={base_env.n_objects}")
-    if base_env.n_objects > 0:
-        print(f"[DEBUG] object.actuated={base_env.object.actuated}")
-
     
     # Now wrap the base environment for RL-Games
     env = base_env
@@ -253,6 +219,7 @@ def main():
     run = wandb.init(
         project=args.wandb_project, 
         config=wandb_cfg,
+        sync_tensorboard=True,
         monitor_gym=True,
         save_code=True,
         name=exp_name,
@@ -287,10 +254,9 @@ def main():
     print(f"\n{'='*80}")
     print(f"Starting training with {len(args.clips)} demonstrations")
     print(f"Experiment: {exp_name}")
-    print(f"Demo switching: On each episode reset (random sampling)")
+    print(f"Demo switching: On each episode reset ({args.demo_sampling} sampling)")
     print(f"Demo info saved to: {demo_info_path}")
     print("="*80)
-    print("\n".join(demo_info_lines))
     print(f"{'='*80}\n")
     
     # create runner from rl-games
@@ -304,6 +270,7 @@ def main():
     if args.checkpoint is not None:
         runner_args["checkpoint"] = os.path.abspath(args.checkpoint) 
     runner.run(runner_args)
+    wandb.finish()
 
     # close the simulator
     exit()
