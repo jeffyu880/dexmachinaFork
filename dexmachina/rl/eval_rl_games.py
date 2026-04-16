@@ -319,9 +319,22 @@ def eval_one_episode(env, agent, obj_state_tensor, print_rew=False, record_video
             eval_data["obj_state"].append(obj_state.cpu().numpy())
             eval_data["demo_state"].append(demo_state.cpu().numpy())
 
-            rew_dict = uenv.rew_dict
-            for key in ['pos_dist', 'rot_dist', 'arti_dist']:
-                eval_data[key].append(rew_dict[key].cpu().numpy())
+            # Collect robot observations
+            left_hand_obs = left_hand.get_observations()
+            right_hand_obs = right_hand.get_observations()
+            for key, val in left_hand_obs.items():
+                eval_data[f"left_hand_{key}"].append(val.cpu().numpy() if hasattr(val, 'cpu') else val)
+            for key, val in right_hand_obs.items():
+                eval_data[f"right_hand_{key}"].append(val.cpu().numpy() if hasattr(val, 'cpu') else val)
+            
+            # Collect object observations
+            obj_obs = obj.get_observations()
+            for key, val in obj_obs.items():
+                eval_data[f"obj_{key}"].append(val.cpu().numpy() if hasattr(val, 'cpu') else val)
+
+            # rew_dict = uenv.rew_dict
+            # for key in ['pos_dist', 'rot_dist', 'arti_dist']:
+            #     eval_data[key].append(rew_dict[key].cpu().numpy())
             if len(dones) > 0:
                 # reset rnn state for terminated episodes
                 if agent.is_rnn and agent.states is not None:
@@ -446,6 +459,7 @@ def main():
     parser = get_common_argparser()
     parser.add_argument('--checkpoint', '-ck', type=str, default="inspire_hand")
     parser.add_argument('--eval_episodes', '-ne', type=int, default=1)
+    parser.add_argument('--npy_name', '-npy', type=str, default=None, help='Base name for the saved .npy file (e.g. "my_eval" -> my_eval_ep0.npy). Defaults to "eval".')
     parser.add_argument('--print_rew', '-pr', action='store_true')
     parser.add_argument('--show_reference', '-ref', action='store_true') # if not ture, don't show the retargeted reference
     parser.add_argument('--reference_clip', '-ref_clip', type=str, default=None, help='Alternative demonstration clip to use as reference trajectory (e.g., "box-0-100")')
@@ -667,7 +681,8 @@ def main():
             except Exception as e:
                 print(f"✗ Error saving ADD metrics JSON: {e}")
         
-        ckpt_eval_fname = os.path.join(ckpt_data_folder, f"eval_ep{eps}.npy")
+        npy_base = args.npy_name if args.npy_name is not None else "eval"
+        ckpt_eval_fname = os.path.join(ckpt_data_folder, f"{npy_base}_ep{eps}.npy")
         np.save(ckpt_eval_fname, eval_data)
         print(f"Saved eval data to {ckpt_eval_fname}")
         # try loading the data
