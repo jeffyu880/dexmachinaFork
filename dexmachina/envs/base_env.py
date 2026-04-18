@@ -286,6 +286,7 @@ class BaseEnv:
                 demo_data=demo_data,
                 visualize_contact=visualize_contact, 
                 disable_collision=cfg.get('disable_collision', False), # or render_figure,
+                # disable_collision=True        # DEBUG
                 ) 
         
         self.object_names = list(self.objects.keys())
@@ -400,6 +401,7 @@ class BaseEnv:
             self.obj_verts = {part: obj.sample_mesh_vertices(300, part) for part in ['top', 'bottom']}
         
         self.observe_contact_force = env_cfg.get('observe_contact_force', False)
+        print("Observe contact force", self.observe_contact_force)
         if self.n_objects == 0:
             self.observe_contact_force = False
             print("Disabling contact force observation because no object")
@@ -764,14 +766,27 @@ class BaseEnv:
         # Main reset causes: timeout, object fell, or invalid (NaN) state.
         need_reset = timeout | object_fell_off | self.nan_envs
         
+        # Track reset reasons for debugging
+        reset_reasons = []
+        if timeout.any():
+            reset_reasons.append(f"timeout: {timeout.nonzero(as_tuple=False).squeeze(-1).tolist()}")
+        if object_fell_off.any():
+            reset_reasons.append(f"fell_off: {object_fell_off.nonzero(as_tuple=False).squeeze(-1).tolist()}")
+        if self.nan_envs.any():
+            reset_reasons.append(f"nan_envs: {self.nan_envs.nonzero(as_tuple=False).squeeze(-1).tolist()}")
+        
         if self.early_reset_threshold > 0.0:
-            # early reset curriculum  
+            # early reset curriculum
+            early_task_reset = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
             for interval in range(0, self.max_episode_length, self.early_reset_interval):
-                need_reset = torch.where(
+                early_task_reset = torch.where(
                     (stepped_length > interval),
                     self.cumulative_task_rew < self.early_reset_threshold * interval,
-                    need_reset
-                ) 
+                    early_task_reset
+                )
+            if (early_task_reset & ~need_reset).any():
+                reset_reasons.append(f"early_reset_task: {(early_task_reset & ~need_reset).nonzero(as_tuple=False).squeeze(-1).tolist()}")
+            need_reset = need_reset | early_task_reset
         
         for key, cum_rew in zip(
             ['con', 'imi', 'bc'],
@@ -779,10 +794,19 @@ class BaseEnv:
         ):  
             thres = self.early_reset_aux_thres.get(key, 0.0)
             if thres > 0.0:
+                aux_reset = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
                 for interval in range(0, self.max_episode_length, 20):   
-                    need_reset = torch.where(
-                        (stepped_length > interval), cum_rew < thres * interval, need_reset
+                    aux_reset = torch.where(
+                        (stepped_length > interval), cum_rew < thres * interval, aux_reset
                     )
+                if (aux_reset & ~need_reset).any():
+                    reset_reasons.append(f"early_reset_{key}: {(aux_reset & ~need_reset).nonzero(as_tuple=False).squeeze(-1).tolist()}")
+                need_reset = need_reset | aux_reset
+        
+        # Print reset reasons if any new resets triggered this step
+        if reset_reasons:
+            print(f"[DEMO {self.current_demo_idx}] Step {stepped_length.max().item()}: Resetting - {', '.join(reset_reasons)}")
+        
         return need_reset, timeout
     
     def prepare_sliced_contact(self, source='policy', part='top', side='left'):
@@ -927,6 +951,7 @@ class BaseEnv:
             else:
                 new_demo_idx = int(self.demo_rng.integers(0, len(self.all_demo_data)))
             if new_demo_idx != self.current_demo_idx:
+                print(f"[DEMO SWITCH] {self.current_demo_idx} -> {new_demo_idx} for envs {env_idxs.tolist()}")
                 self.current_demo_idx = new_demo_idx
                 self.change_demo(
                     self.all_demo_data[new_demo_idx],
@@ -934,11 +959,18 @@ class BaseEnv:
                     reset_envs=False,  # Don't reset yet, we'll do it below
                     demo_idx=new_demo_idx
                 )
+            else:
+                print(f"[RESET] Keeping demo {self.current_demo_idx} for envs {env_idxs.tolist()}")
         
         self.randomization.on_reset_idx(env_idxs)
         progressed = self.episode_length_buf[env_idxs] - self.episode_start_buf[env_idxs]
         progressed_avg = torch.mean(progressed.float()).item()
         self.max_achieved_length = int(self.max_achieved_length * 0.5 + progressed_avg * 0.5)
+        
+        # Debug: print episode rewards before reset
+        if len(env_idxs) > 0 and self.use_curriculum:
+            task_rew = self.cumulative_task_rew[env_idxs].mean().item()
+            print(f"[RESET DEBUG] Env {env_idxs[0]}: task_reward={task_rew:.2f}, progressed={progressed[0].item()}, threshold={self.early_reset_threshold}")
 
         if self.use_curriculum:
             episode_rewards = dict()
@@ -1018,6 +1050,103 @@ class BaseEnv:
             self.obs_buf[:] = self.get_observations()
         self.scene.step()
         return self.obs_buf, None #self.extras
+
+    def save_demo_trajectories(self, demo_data, retarget_data, demo_idx, output_dir='demo_trajectories'):
+        """
+        Save demo trajectories to file for analysis.
+        
+        Saves:
+        - Demo index and name
+        - FULL object trajectories (positions and quaternions) - all frames
+        - FULL hand wrist tracking data ONLY (left and right) - all frames
+          * wrist_position: [num_frames, 3] - X, Y, Z coordinates
+          * wrist_rotation: [num_frames, 3] - roll, pitch, yaw angles
+        - NO finger joint data
+        
+        Args:
+            demo_data: Demonstration data dictionary
+            retarget_data: Retargeting data dictionary (hand joint targets)
+            demo_idx: Demo index number
+            output_dir: Directory to save trajectories (creates if doesn't exist)
+        """
+        import json
+        import numpy as np
+        os.makedirs(output_dir, exist_ok=True)
+        
+        demo_name = None
+        if demo_idx is not None and 0 <= demo_idx < len(self.all_demo_names):
+            demo_name = self.all_demo_names[demo_idx]
+        
+        # Safe filename from demo name
+        safe_name = str(demo_name).replace('/', '_').replace(' ', '_') if demo_name else f"demo_{demo_idx}"
+        output_file = os.path.join(output_dir, f"{safe_name}_trajectories.json")
+        
+        # Extract and convert tensors to lists
+        trajectory_data = {
+            "demo_idx": int(demo_idx),
+            "demo_name": str(demo_name) if demo_name else None,
+        }
+        
+        # Full Object trajectory
+        if 'obj_pos' in demo_data:
+            obj_pos = demo_data['obj_pos']
+            if isinstance(obj_pos, torch.Tensor):
+                obj_pos = obj_pos.cpu().numpy()
+            trajectory_data['object'] = {
+                'trajectory_shape': list(obj_pos.shape),
+                'num_frames': int(obj_pos.shape[0]),
+                'positions': obj_pos.tolist(),  # FULL trajectory - all frames
+                'first_position': obj_pos[0, :3].tolist(),
+                'last_position': obj_pos[-1, :3].tolist(),
+            }
+            if 'obj_quat' in demo_data:
+                obj_quat = demo_data['obj_quat']
+                if isinstance(obj_quat, torch.Tensor):
+                    obj_quat = obj_quat.cpu().numpy()
+                trajectory_data['object']['quaternions'] = obj_quat.tolist()  # FULL trajectory - all frames
+                trajectory_data['object']['first_quat'] = obj_quat[0].tolist()
+                trajectory_data['object']['last_quat'] = obj_quat[-1].tolist()
+        
+        # Hand WRIST trajectories ONLY
+        trajectory_data['hands'] = {}
+        for side in ['left', 'right']:
+            side_data = retarget_data.get(side, {})
+            if 'residual_qpos' in side_data:
+                residual_qpos = side_data['residual_qpos']
+                num_frames = side_data.get('num_frames', 0)
+                
+                # Extract wrist data from residual_qpos
+                # [0-2]: X, Y, Z wrist position
+                # [3-5]: roll, pitch, yaw wrist rotation
+                if isinstance(residual_qpos, dict) and len(residual_qpos) > 0:
+                    first_key = list(residual_qpos.keys())[0]
+                    qpos_array = residual_qpos[first_key]
+                    if isinstance(qpos_array, torch.Tensor):
+                        qpos_array = qpos_array.cpu().numpy()
+                    
+                    # Ensure it's 2D [frames, joints]
+                    if len(qpos_array.shape) == 1:
+                        # If 1D, reshape assuming it's one frame
+                        qpos_array = qpos_array.reshape(1, -1)
+                    
+                    # Extract ONLY wrist data (first 6 values per frame)
+                    if qpos_array.shape[1] >= 6:
+                        wrist_pos = qpos_array[:, :3].tolist()  # All frames, [X, Y, Z]
+                        wrist_rot = qpos_array[:, 3:6].tolist()  # All frames, [roll, pitch, yaw]
+                        
+                        trajectory_data['hands'][side] = {
+                            'num_frames': int(qpos_array.shape[0]),
+                            'wrist_position': wrist_pos,      # List of [X, Y, Z] for each frame
+                            'wrist_rotation': wrist_rot,      # List of [roll, pitch, yaw] for each frame
+                        }
+        
+        # Save to JSON
+        with open(output_file, 'w') as f:
+            json.dump(trajectory_data, f, indent=2)
+        
+        file_size_kb = os.path.getsize(output_file) / 1024
+        print(f"[SAVED] Wrist trajectories to {output_file} ({file_size_kb:.1f} KB)")
+        return output_file
 
     def change_demo(self, demo_data, retarget_data, reset_envs=True, demo_idx=None):
         """
@@ -1106,6 +1235,10 @@ class BaseEnv:
             self.demo_switch_counts[demo_idx] += 1
         name_str = f", name={demo_name}" if demo_name is not None else ""
         print(f"[INFO] Changed demo{idx_str}{name_str} (length={self.demo_length})")
+        
+        # Save trajectories to file for analysis
+        if demo_idx is not None:
+            self.save_demo_trajectories(demo_data, retarget_data, demo_idx)
 
     def transform_vertice_frame(self, vertices, pose):
         """ transform the vertices to the object frame """
