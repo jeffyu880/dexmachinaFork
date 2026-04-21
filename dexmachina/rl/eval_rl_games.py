@@ -559,7 +559,49 @@ def main():
     if args.overlay:
         env_kwargs['env_cfg']['env_spacing'] = (0.0, 0.0)
     print("Removing any curriculum config during eval")
-    env_kwargs.pop("curriculum_cfg") 
+    env_kwargs.pop("curriculum_cfg")
+    
+    # Load reference clip BEFORE creating environment so demo_data is correct from the start
+    if args.reference_clip is not None:
+        print(f"\n[INFO] Loading alternative reference clip: {args.reference_clip}")
+        from dexmachina.envs.demo_data import get_demo_data, load_genesis_retarget_data
+        # Parse reference clip
+        obj_name_ref, start, end, subject_name, use_clip = parse_clip_string(args.reference_clip)
+        # Use the hand type from the training checkpoint, not command-line default
+        checkpoint_hand = env_kwargs['env_cfg'].get('hand', args.hand)
+        print(f"[DEBUG] Using hand from checkpoint: {checkpoint_hand} (command-line was: {args.hand})")
+        # Load reference demo data (object data only)
+        demo_data = get_demo_data(
+            obj_name=obj_name_ref, 
+            frame_start=start, 
+            frame_end=end, 
+            hand_name=checkpoint_hand,
+            subject_name=subject_name, 
+            use_clip=use_clip,
+            load_retarget_contact=True, 
+        )
+        # Also load retargeted hand trajectories
+        _, ref_retarget_data = load_genesis_retarget_data(
+            obj_name=obj_name_ref,
+            hand_name=checkpoint_hand,
+            frame_start=start,
+            frame_end=end,
+            save_name="para",  # Match the training retarget variant
+            use_clip=use_clip,
+            subject_name=subject_name,
+        )
+
+        print(f"[INFO] Loaded reference clip: {args.reference_clip}")
+        print(f"       Subject: {subject_name}, Frames: {start}-{end} ({int(end)-int(start)} frames)")
+        print(f"[DEBUG] Reference demo_data keys: {list(demo_data.keys())}, hand: {checkpoint_hand}")
+        # Update env_kwargs to use the alternative reference demo
+        env_kwargs['demo_data'] = demo_data
+        env_kwargs['retarget_data'] = ref_retarget_data
+    else:
+        print(f"[INFO] Using training clip reference trajectory")
+        demo_data = env_kwargs['demo_data']
+
+      
     device = torch.device('cuda:0')
     import genesis as gs
     gs.init(backend=gs.gpu, logging_level='warning')
@@ -567,26 +609,25 @@ def main():
          **env_kwargs
     )
     
-    # Load reference clip (either alternative or default training clip)
-    if args.reference_clip is not None:
-        print(f"\n[INFO] Loading alternative reference clip: {args.reference_clip}")
-        from dexmachina.envs.constructors import get_all_env_cfg
-        # Parse reference clip
-        obj_name, start, end, subject_name, use_clip = parse_clip_string(args.reference_clip)
-        # Create temporary args for loading reference clip
-        ref_args = argparse.Namespace(**env_kwargs['env_cfg'])
-        ref_args.arctic_object = obj_name
-        ref_args.frame_start = start
-        ref_args.frame_end = end
-        ref_args.arctic_subject = subject_name  # Override subject if different from training
-        ref_args.use_clip = use_clip  # Override use_clip if different
-        # Load reference clip data
-        ref_env_cfg = get_all_env_cfg(ref_args, device='cuda:0')
-        demo_data = ref_env_cfg['demo_data']
-        print(f"[INFO] Loaded reference clip: {args.reference_clip}")
-        print(f"       Subject: {subject_name}, Frames: {start}-{end} ({int(end)-int(start)} frames)")
-    else:
-        demo_data = env_kwargs['demo_data']
+    # # Load reference clip (either alternative or default training clip)
+    # if args.reference_clip is not None:
+    #     print(f"\n[INFO] Loading alternative reference clip: {args.reference_clip}")
+    #     from dexmachina.envs.constructors import get_all_env_cfg
+    #     # Parse reference clip
+    #     obj_name, start, end, subject_name, use_clip = parse_clip_string(args.reference_clip)
+    #     # Create temporary args for loading reference clip
+    #     ref_args = argparse.Namespace(**env_kwargs['env_cfg'])
+    #     ref_args.arctic_object = obj_name
+    #     ref_args.frame_start = start
+    #     ref_args.frame_end = end
+    #     ref_args.arctic_subject = subject_name  # Override subject if different from training
+    #     ref_args.use_clip = use_clip  # Override use_clip if different
+    #     # Load reference clip data
+    #     ref_env_cfg = get_all_env_cfg(ref_args, device='cuda:0')
+    #     demo_data = ref_env_cfg['demo_data']
+    #     print(f"[INFO] Loaded reference clip: {args.reference_clip}")
+    #     print(f"       Subject: {subject_name}, Frames: {start}-{end} ({int(end)-int(start)} frames)")
+    # else:
 
     # Extract object name from object_cfgs (it's the key in the dictionary)
     obj_name = list(env_kwargs['object_cfgs'].keys())[0]
@@ -634,52 +675,52 @@ def main():
             env, agent, obj_state_tensor, args.print_rew, args.record_video, args.show_reference
             )
         
-        if object_models is not None:
-            # Compute AUC-ADD3 metric
-            print("\n" + "="*60)
-            print("Computing AUC-ADD3 Metric")
-            print("="*60)
-            add3_metrics = compute_auc_add3(
-                eval_data['obj_state'][:, 0, :],        # take just the first policy demonstration
-                eval_data['demo_state'],
-                object_models=object_models,  # Can pass object vertices if available
-                num_timesteps=80            # number of timesteps to use for ADD calculations
-            )
+        # if object_models is not None:
+        #     # Compute AUC-ADD3 metric
+        #     print("\n" + "="*60)
+        #     print("Computing AUC-ADD3 Metric")
+        #     print("="*60)
+        #     add3_metrics = compute_auc_add3(
+        #         eval_data['obj_state'][:, 0, :],        # take just the first policy demonstration
+        #         eval_data['demo_state'],
+        #         object_models=object_models,  # Can pass object vertices if available
+        #         num_timesteps=80            # number of timesteps to use for ADD calculations
+        #     )
             
-            # Add AUC-ADD3 metrics to eval_data
-            eval_data['mean_add_errors'] = add3_metrics['mean_add_errors']
-            eval_data['mean_avg_add_errors'] = add3_metrics['mean_avg_add_errors']
-            eval_data['auc_add3'] = add3_metrics['auc_add3']
-            eval_data['avg_auc3_add_errors'] = add3_metrics['auc_avg_add3']
-            # eval_data['auc_add3'] = add3_metrics['auc_add3']
+        #     # Add AUC-ADD3 metrics to eval_data
+        #     eval_data['mean_add_errors'] = add3_metrics['mean_add_errors']
+        #     eval_data['mean_avg_add_errors'] = add3_metrics['mean_avg_add_errors']
+        #     eval_data['auc_add3'] = add3_metrics['auc_add3']
+        #     eval_data['avg_auc3_add_errors'] = add3_metrics['auc_avg_add3']
+        #     # eval_data['auc_add3'] = add3_metrics['auc_add3']
             
-            # Print AUC-ADD3 results
-            print(f"ADD Errors: {add3_metrics['mean_add_errors']}")
-            print(f"Average ADD Errors: {add3_metrics['mean_avg_add_errors']}")
-            print(f"AUC-ADD3 Score: {add3_metrics['auc_add3']:.6f}")
-            print(f"Average AUC3 ADD Errors: {add3_metrics['auc_avg_add3']:.6f}")
-            print("="*60 + "\n")
+        #     # Print AUC-ADD3 results
+        #     print(f"ADD Errors: {add3_metrics['mean_add_errors']}")
+        #     print(f"Average ADD Errors: {add3_metrics['mean_avg_add_errors']}")
+        #     print(f"AUC-ADD3 Score: {add3_metrics['auc_add3']:.6f}")
+        #     print(f"Average AUC3 ADD Errors: {add3_metrics['auc_avg_add3']:.6f}")
+        #     print("="*60 + "\n")
 
-            # Save ADD metrics to JSON file with checkpoint name
-            try:
-                add_metrics_fname = os.path.join(ckpt_data_folder, f"{ckpt_name.split('.')[0]}_add_metrics_ep{eps}.json")
+        #     # Save ADD metrics to JSON file with checkpoint name
+        #     try:
+        #         add_metrics_fname = os.path.join(ckpt_data_folder, f"{ckpt_name.split('.')[0]}_add_metrics_ep{eps}.json")
                 
-                # Ensure parent directory exists
-                os.makedirs(os.path.dirname(add_metrics_fname), exist_ok=True)
+        #         # Ensure parent directory exists
+        #         os.makedirs(os.path.dirname(add_metrics_fname), exist_ok=True)
                 
-                metrics_to_save = {
-                    'mean_add_errors': float(add3_metrics['mean_add_errors']),
-                    'mean_avg_add_errors': float(add3_metrics['mean_avg_add_errors']),
-                    'auc_add3': float(add3_metrics['auc_add3']),
-                    'auc_avg_add3': float(add3_metrics['auc_avg_add3']),
-                    'episode_length': int(add3_metrics['episode_length']),
-                    'checkpoint': args.checkpoint,
-                }
-                with open(add_metrics_fname, 'w') as f:
-                    json.dump(metrics_to_save, f, indent=2)
-                print(f"✓ Saved ADD metrics to {add_metrics_fname}")
-            except Exception as e:
-                print(f"✗ Error saving ADD metrics JSON: {e}")
+        #         metrics_to_save = {
+        #             'mean_add_errors': float(add3_metrics['mean_add_errors']),
+        #             'mean_avg_add_errors': float(add3_metrics['mean_avg_add_errors']),
+        #             'auc_add3': float(add3_metrics['auc_add3']),
+        #             'auc_avg_add3': float(add3_metrics['auc_avg_add3']),
+        #             'episode_length': int(add3_metrics['episode_length']),
+        #             'checkpoint': args.checkpoint,
+        #         }
+        #         with open(add_metrics_fname, 'w') as f:
+        #             json.dump(metrics_to_save, f, indent=2)
+        #         print(f"✓ Saved ADD metrics to {add_metrics_fname}")
+        #     except Exception as e:
+        #         print(f"✗ Error saving ADD metrics JSON: {e}")
         
         npy_base = args.npy_name if args.npy_name is not None else "eval"
         ckpt_eval_fname = os.path.join(ckpt_data_folder, f"{npy_base}_ep{eps}.npy")
