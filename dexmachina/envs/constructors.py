@@ -38,6 +38,8 @@ def get_all_env_cfg(args, device, load_retarget_data=True):
     reward_cfg['use_retarget_contact'] = args.use_retarget_contact 
     reward_cfg['retarget_objframe'] = not args.retarget_worldfr
     reward_cfg['action_penalty'] = args.action_penalty
+    
+    # reward_cfg['contact_rew_weight'] = 0 # DEBUG
 
     if args.objdex_baseline:
         print("Setting action mode to hybrid for objdex baseline and task rew beta to lower")
@@ -105,8 +107,10 @@ def get_all_env_cfg(args, device, load_retarget_data=True):
     env_cfg['episode_length'] = ep_len
     env_cfg['observe_tip_dist'] = args.observe_tip_dist
     env_cfg['observe_contact_force'] = True #ve_contact_force
+    # env_cfg['observe_contact_force'] = False #ve_contact_force DEBUG
     print(f"Setting observe_contact_force to True")
     env_cfg['use_contact_reward'] = args.contact_rew_weight > 0
+    # env_cfg['use_contact_reward'] = False   # DEBUG
     env_cfg['use_rl_games'] = args.use_rl_games
     env_cfg['rand_init_ratio'] = args.rand_init_ratio  
     env_cfg['chunk_ep_length'] = args.chunk_ep_length

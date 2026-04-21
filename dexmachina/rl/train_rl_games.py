@@ -85,6 +85,9 @@ def main():
     num_envs = args.num_envs   
     env_kwargs = get_all_env_cfg(args, device='cuda:0')
     env_kwargs['env_cfg']['use_rl_games'] = True
+    # env_kwargs['env_cfg']['use_contact_reward'] = False     # DEBUG
+    # env_kwargs['env_cfg']['observe_contact_force'] = False
+
     device = torch.device('cuda:0')
     import genesis as gs
     gs.init(backend=gs.gpu, logging_level='warning')

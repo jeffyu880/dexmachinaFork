@@ -99,7 +99,7 @@ def create_scene(args, object_name, urdfs, num_raw_contact_markers=50, num_group
             ]
         ),
         viewer_options=gs.options.ViewerOptions( 
-            camera_pos=(1.5, 0.8, 2.1),
+            camera_pos=(2, 1.2, 2.5),
             camera_lookat=(0.0, -0.1, 1.1),
             camera_fov=25,
         ),
@@ -127,11 +127,11 @@ def create_scene(args, object_name, urdfs, num_raw_contact_markers=50, num_group
         if args.raytrace:
             cam = scene.add_camera(
             pos=scene_cfg['viewer_options'].camera_pos, lookat=scene_cfg['viewer_options'].camera_lookat,
-            res=(1024, 1024), fov=20, GUI=False) 
+            res=(1024, 1024), fov=35, GUI=False) 
         else:
             cam = scene.add_camera(
             pos=scene_cfg['viewer_options'].camera_pos, lookat=scene_cfg['viewer_options'].camera_lookat,
-            res=(512, 512), fov=20, GUI=False)
+            res=(512, 512), fov=35, GUI=False)
     
     hand_entities = dict()
     for side, urdf_path in urdfs.items():
