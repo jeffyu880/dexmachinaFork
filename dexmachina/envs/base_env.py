@@ -200,6 +200,7 @@ class BaseEnv:
             print(f"[WARN] Unknown demo_sampling={self.demo_sampling}, defaulting to random")
             self.demo_sampling = 'random'
         self.next_demo_idx = 0
+        self.env_demo_idx = None  # per-env demo tracking (populated in post_scene_build_setup)
 
         self.num_envs = env_cfg['num_envs']
         self.max_video_frames = env_cfg['max_video_frames']
@@ -448,13 +449,31 @@ class BaseEnv:
             self._step_env_idxs = self._step_env_idxs[:-1] # skip the LAST env for eval
         
         self.randomization = RandomizationModule(rand_cfg, self.rigid_solver, self.object, self.num_envs)
-        if self.record_video: #  and self.num_envs > 2: 
+        if self.record_video: #  and self.num_envs > 2:
             # NOTE: set the camera to only record the first env, must do this after the scene.build call
             offset = self.scene.rigid_solver.envs_offset.to_numpy()[0] # (3,)
             lookat_pos = offset + np.array([0, -0.1, 1.0])
             cam_pos = lookat_pos + np.array([0.0, -1.5, 1.2])
             self._set_camera(pos=cam_pos, lookat=lookat_pos, fov=30, name='front')
 
+        if len(self.all_demo_data) > 1:
+            self._setup_multi_demo()
+
+    def _setup_multi_demo(self):
+        """Pre-load all demos into subsystems and initialize per-env demo tracking."""
+        self.reward_module.load_all_demos(self.all_demo_data, self.all_retarget_data, self.device)
+        for side, robot in self.robots.items():
+            robot.set_all_residual_qpos(self.all_retarget_data, side)
+        if self.n_objects == 1:
+            obj = self.objects[self.object_names[0]]
+            obj.set_all_demo_states(self.all_demo_data)
+        num_demos = len(self.all_demo_data)
+        self.env_demo_idx = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+        for side, robot in self.robots.items():
+            robot.env_demo_idx = self.env_demo_idx
+        if self.n_objects == 1:
+            self.objects[self.object_names[0]].env_demo_idx = self.env_demo_idx
+        print(f"[MULTI-DEMO] Pre-loaded {num_demos} demos for per-env switching")
 
     def setup_actions(self, robots: Dict[str, BaseRobot]):
         action_dim = 0 
@@ -613,7 +632,11 @@ class BaseEnv:
         self.randomization.on_step(self.episode_length_buf)
         self.scene.step()  
         self.episode_length_buf += 1
-        self.demo_step_counts[self.current_demo_idx] += len(self._step_env_idxs)
+        if self.env_demo_idx is not None:
+            for d in self.env_demo_idx[self._step_env_idxs].tolist():
+                self.demo_step_counts[d] += 1
+        else:
+            self.demo_step_counts[self.current_demo_idx] += len(self._step_env_idxs)
         # self.progress_episode_length() 
         self._compute_intermediate_values()
         
@@ -715,7 +738,8 @@ class BaseEnv:
                 contact_forces=self.contact_forces
             )
         rewards, rew_dict = self.reward_module.compute_reward(
-            **reward_kwargs
+            **reward_kwargs,
+            env_demo_idx=self.env_demo_idx,
         )
         
         if not self.use_rl_games:
@@ -824,7 +848,7 @@ class BaseEnv:
                 _pos = _pos[:, self.num_left_contact_links:]
 
         else:        
-            _pos = self.reward_module.match_demo_state(f'contact_links_{side}', self.episode_length_buf) # (N, 2*nlinks, 4) -> last dim is part id
+            _pos = self.reward_module.match_demo_state(f'contact_links_{side}', self.episode_length_buf, self.env_demo_idx) # (N, 2*nlinks, 4) -> last dim is part id
             part_id = 2 if part == 'bottom' else 1
             if len(_pos.shape) == 4:
                # for retargeted contact, the shape is (N, 2, nlinks, 4) 
@@ -944,24 +968,26 @@ class BaseEnv:
         if len(env_idxs) == 0:
             return
         
-        # Sample a new demo if multiple demos are available
-        if len(self.all_demo_data) > 1:
+        # Sample a new demo per env if multiple demos are available
+        if len(self.all_demo_data) > 1 and self.env_demo_idx is not None:
+            num_demos = len(self.all_demo_data)
             if self.demo_sampling == 'deterministic':
-                new_demo_idx = int(self.next_demo_idx)
-                self.next_demo_idx = (self.next_demo_idx + 1) % len(self.all_demo_data)
+                new_indices = torch.arange(len(env_idxs), dtype=torch.long)
+                new_demo_idxs = (self.next_demo_idx + new_indices) % num_demos
+                self.next_demo_idx = (self.next_demo_idx + len(env_idxs)) % num_demos
+                new_demo_idxs = new_demo_idxs.to(self.device)
             else:
-                new_demo_idx = int(self.demo_rng.integers(0, len(self.all_demo_data)))
-            if new_demo_idx != self.current_demo_idx:
-                # print(f"[DEMO SWITCH] {self.current_demo_idx} -> {new_demo_idx} for envs {env_idxs.tolist()}")
-                self.current_demo_idx = new_demo_idx
-                self.change_demo(
-                    self.all_demo_data[new_demo_idx],
-                    self.all_retarget_data[new_demo_idx],
-                    reset_envs=False,  # Don't reset yet, we'll do it below
-                    demo_idx=new_demo_idx
+                new_demo_idxs = torch.tensor(
+                    self.demo_rng.integers(0, num_demos, size=len(env_idxs)),
+                    dtype=torch.long, device=self.device
                 )
-            # else:
-                # print(f"[RESET] Keeping demo {self.current_demo_idx} for envs {env_idxs.tolist()}")
+            # track switch counts
+            for i, env_idx in enumerate(env_idxs):
+                old = self.env_demo_idx[env_idx].item()
+                new = new_demo_idxs[i].item()
+                if new != old:
+                    self.demo_switch_counts[new] += 1
+            self.env_demo_idx[env_idxs] = new_demo_idxs
         
         self.randomization.on_reset_idx(env_idxs)
         progressed = self.episode_length_buf[env_idxs] - self.episode_start_buf[env_idxs]

@@ -90,9 +90,13 @@ class ArticulatedObject:
         base_quat = obj_cfg["base_init_quat"]
         self.offset_pos = obj_cfg["offset_pos"]
         base_pos = [base_pos[i] + self.offset_pos[i] for i in range(3)]
-        self.demo_states = None 
+        self.demo_states = None
         self.demo_dofs = None
         self.num_demo_frames = 0
+        self.all_demo_states = None
+        self.all_demo_dofs = None
+        self.all_num_demo_frames = None
+        self.env_demo_idx = None
         if demo_data is not None and demo_data != {}:
             # overwrite base pose 
             base_pos, base_quat = self.set_demo_states(demo_data)
@@ -215,7 +219,36 @@ class ArticulatedObject:
         self.demo_states = np.concatenate([obj_pos, obj_quat, obj_arti], axis=1)
         self.demo_states = torch.tensor(self.demo_states, dtype=torch.float32, device=self.device)
         return base_pos, base_quat
-    
+
+    def set_all_demo_states(self, all_demo_data):
+        """Pre-load all demos' states as (num_demos, T, 8) for per-env switching."""
+        per_demo_states = []
+        per_demo_lengths = []
+        for demo_data in all_demo_data:
+            self.set_demo_states(demo_data)
+            per_demo_states.append(self.demo_states.clone())
+            per_demo_lengths.append(self.demo_states.shape[0])
+        self.all_demo_states = torch.stack(per_demo_states, dim=0)
+        self.all_num_demo_frames = per_demo_lengths
+        # build all_demo_dofs for actuated objects (requires post_built)
+        if self.actuated and self.post_built:
+            all_dofs = []
+            for states in per_demo_states:
+                demo_dofs = []
+                for i in range(states.shape[0]):
+                    s = states[i]
+                    self.set_object_state(
+                        root_pos=s[:3][None].repeat(self.num_envs, 1),
+                        root_quat=s[3:7][None].repeat(self.num_envs, 1),
+                        joint_qpos=s[7:8][None].repeat(self.num_envs, 1),
+                    )
+                    demo_dofs.append(self.entity.get_dofs_position()[0])
+                all_dofs.append(torch.stack(demo_dofs, dim=0))
+            self.all_demo_dofs = torch.stack(all_dofs, dim=0)
+        # restore to first demo
+        self.demo_states = per_demo_states[0]
+        self.num_demo_frames = per_demo_lengths[0]
+
     def set_to_demo_step(self, step=0):
         assert self.demo_states is not None, "demo_states is None"
         assert step < self.demo_states.shape[0], f"step={step} >= demo_states.shape[0]={self.demo_states.shape[0]}"
@@ -346,9 +379,16 @@ class ArticulatedObject:
         self.dof_vel[:] = entity.get_dofs_velocity(self.dof_idxs)
         self.contact_force[:] = entity.get_links_net_contact_force()
         if self.demo_states is not None:
-            demo_goal_t = torch.where(
-                self.episode_length_buf >= self.num_demo_frames - 1, self.num_demo_frames - 1, self.episode_length_buf + 1)
-            self.state_diff[:] = self.demo_states[demo_goal_t] - torch.cat(
+            if self.env_demo_idx is not None and self.all_demo_states is not None:
+                demo_lengths = torch.tensor(self.all_num_demo_frames, device=self.device, dtype=self.episode_length_buf.dtype)
+                per_env_len = demo_lengths[self.env_demo_idx]
+                demo_goal_t = torch.minimum(self.episode_length_buf + 1, per_env_len - 1)
+                goal_states = self.all_demo_states[self.env_demo_idx, demo_goal_t]
+            else:
+                demo_goal_t = torch.where(
+                    self.episode_length_buf >= self.num_demo_frames - 1, self.num_demo_frames - 1, self.episode_length_buf + 1)
+                goal_states = self.demo_states[demo_goal_t]
+            self.state_diff[:] = goal_states - torch.cat(
                 [self.root_pos, self.root_quat, self.dof_pos], dim=-1)
     
     def get_nan_envs(self):
@@ -399,7 +439,10 @@ class ArticulatedObject:
         
         init_qpos = self.init_qpos
         if episode_start is not None and torch.any(episode_start): # non-zero starts
-            init_qpos = self.demo_states[episode_start, 7: 8].clone() # shape should be (N, 1)
+            if self.env_demo_idx is not None and self.all_demo_states is not None:
+                init_qpos = self.all_demo_states[self.env_demo_idx[env_idxs], episode_start, 7:8].clone()
+            else:
+                init_qpos = self.demo_states[episode_start, 7:8].clone()
         
         # try randomize the kp/kp
         if env_idxs is None:
@@ -427,7 +470,10 @@ class ArticulatedObject:
         )
         init_pos = self.init_pos
         if episode_start is not None and torch.any(episode_start):
-            init_pos = self.demo_states[episode_start, :3].clone()
+            if self.env_demo_idx is not None and self.all_demo_states is not None:
+                init_pos = self.all_demo_states[self.env_demo_idx[env_idxs], episode_start, :3].clone()
+            else:
+                init_pos = self.demo_states[episode_start, :3].clone()
         self.root_pos[env_idxs, :] = init_pos
         self.entity.set_pos(
             pos=self.root_pos[env_idxs],
@@ -436,7 +482,10 @@ class ArticulatedObject:
 
         init_quat = self.init_quat
         if episode_start is not None and torch.any(episode_start):
-            init_quat = self.demo_states[episode_start, 3:7].clone()
+            if self.env_demo_idx is not None and self.all_demo_states is not None:
+                init_quat = self.all_demo_states[self.env_demo_idx[env_idxs], episode_start, 3:7].clone()
+            else:
+                init_quat = self.demo_states[episode_start, 3:7].clone()
         self.root_quat[env_idxs, :] = init_quat
         self.entity.set_quat(
             quat=self.root_quat[env_idxs],
@@ -491,10 +540,16 @@ class ArticulatedObject:
     def step(self, env_idxs=None):
         assert self.initialized, "Object not initialized" 
         assert self.post_built, "Must call post_scene_build_setup before stepping"
-        if self.actuated: 
-            demo_goal_t = torch.where(
-                self.episode_length_buf >= self.num_demo_frames - 1, self.num_demo_frames - 1, self.episode_length_buf + 1) 
-            targets = self.demo_dofs[demo_goal_t]
+        if self.actuated:
+            if self.env_demo_idx is not None and self.all_demo_dofs is not None:
+                demo_lengths = torch.tensor(self.all_num_demo_frames, device=self.device, dtype=self.episode_length_buf.dtype)
+                per_env_len = demo_lengths[self.env_demo_idx]
+                demo_goal_t = torch.minimum(self.episode_length_buf + 1, per_env_len - 1)
+                targets = self.all_demo_dofs[self.env_demo_idx, demo_goal_t]
+            else:
+                demo_goal_t = torch.where(
+                    self.episode_length_buf >= self.num_demo_frames - 1, self.num_demo_frames - 1, self.episode_length_buf + 1)
+                targets = self.demo_dofs[demo_goal_t]
             self.entity.control_dofs_position(targets)
         if len(self.texture_meshes) > 0:
             for part, mesh in self.texture_meshes.items():

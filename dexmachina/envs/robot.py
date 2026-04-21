@@ -219,6 +219,9 @@ class BaseRobot:
 
         self.residual_qpos = None
         self.residual_num_frames = None
+        self.all_residual_qpos = None
+        self.all_residual_num_frames = None
+        self.env_demo_idx = None
         if 'residual_qpos' in retarget_data:
             qpos_targets = None
             if self.cfg.get("use_saved_targets", False):
@@ -298,8 +301,36 @@ class BaseRobot:
             else:
                 residual_qpos[:, dof_idx] = qpos.to(self.device)
         self.residual_qpos = residual_qpos
-        self.residual_num_frames = num_frames 
-    
+        self.residual_num_frames = num_frames
+
+    def set_all_residual_qpos(self, all_retarget_data, side):
+        """Pre-load all demos' residual qpos as (num_demos, T, ndof) for per-env switching."""
+        per_demo_qpos = []
+        per_demo_lengths = []
+        for retarget_data in all_retarget_data:
+            side_data = retarget_data.get(side, {})
+            if 'residual_qpos' not in side_data:
+                per_demo_qpos.append(None)
+                per_demo_lengths.append(0)
+                continue
+            qpos_targets = None
+            if self.cfg.get("use_saved_targets", False):
+                qpos_targets = side_data.get('qpos_targets', None)
+            self.set_residual_qpos(
+                num_frames=side_data['num_frames'],
+                residual_qpos_dict=side_data['residual_qpos'],
+                qpos_targets_dict=qpos_targets,
+            )
+            per_demo_qpos.append(self.residual_qpos.clone())
+            per_demo_lengths.append(side_data['num_frames'])
+        if all(q is None for q in per_demo_qpos):
+            return
+        self.all_residual_qpos = torch.stack([q for q in per_demo_qpos if q is not None], dim=0)
+        self.all_residual_num_frames = [l for l in per_demo_lengths if l > 0]
+        # restore to first demo
+        self.residual_qpos = self.all_residual_qpos[0]
+        self.residual_num_frames = self.all_residual_num_frames[0]
+
     def smooth_residual_qpos(self, joint_idxs=None):
         """
         return a smoothed version of residual_qpos along time dimension
@@ -563,12 +594,18 @@ class BaseRobot:
         upper_limit = self.dof_limits[:, 1] # shape (n_envs,)
         lower_limit = self.dof_limits[:, 0] # shape shape (n_envs,) 
         if self.residual_qpos is not None:
-            demo_t = torch.where(
-                episode_length_buf >= self.residual_num_frames, 
-                self.residual_num_frames - 1, 
-                episode_length_buf
-                )
-            res_qpos = self.residual_qpos[demo_t] # shape (n_envs, ndof)
+            if self.env_demo_idx is not None and self.all_residual_qpos is not None:
+                demo_lengths = torch.tensor(self.all_residual_num_frames, device=self.device, dtype=episode_length_buf.dtype)
+                per_env_len = demo_lengths[self.env_demo_idx]
+                demo_t = torch.minimum(episode_length_buf, per_env_len - 1)
+                res_qpos = self.all_residual_qpos[self.env_demo_idx, demo_t]
+            else:
+                demo_t = torch.where(
+                    episode_length_buf >= self.residual_num_frames,
+                    self.residual_num_frames - 1,
+                    episode_length_buf
+                    )
+                res_qpos = self.residual_qpos[demo_t]
             self.curr_res_qpos[:] = res_qpos
             
         if self.action_mode == "residual":
@@ -656,8 +693,13 @@ class BaseRobot:
             assert episode_start.shape[0] == len(env_idxs), f"episode_start.shape={episode_start.shape} != {len(env_idxs)}" 
         # reset value buffers 
         if episode_start is not None and self.action_mode in ['residual', 'kinematic'] and self.residual_qpos is not None:
-            # reset to residual qpos 
-            init_qpos = self.residual_qpos[episode_start] # shape (n_envs, ndof)
+            if self.env_demo_idx is not None and self.all_residual_qpos is not None:
+                demo_lengths = torch.tensor(self.all_residual_num_frames, device=self.device, dtype=episode_start.dtype)
+                per_env_len = demo_lengths[self.env_demo_idx[env_idxs]]
+                starts = torch.minimum(episode_start, per_env_len - 1)
+                init_qpos = self.all_residual_qpos[self.env_demo_idx[env_idxs], starts]
+            else:
+                init_qpos = self.residual_qpos[episode_start]
         else:
             init_qpos = self.init_qpos[env_idxs] 
         
