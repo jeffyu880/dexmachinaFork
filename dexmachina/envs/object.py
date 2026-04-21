@@ -85,6 +85,7 @@ class ArticulatedObject:
         self.num_joints = 1 
         self.dof_idxs = None
         self.obs_scale = obs_scale
+        self.goal_target = None
  
         base_pos = obj_cfg["base_init_pos"]
         base_quat = obj_cfg["base_init_quat"]
@@ -362,6 +363,7 @@ class ArticulatedObject:
         
         self.contact_force = torch.zeros((self.num_envs, self.n_links, 3), dtype=torch.float32, device=self.device)
         self.state_diff = torch.zeros((self.num_envs, 8), dtype=torch.float32, device=self.device)
+        self.goal_target = torch.zeros((self.num_envs, 8), dtype=torch.float32, device=self.device)
 
     def update_value_buffers(self):
         assert self.initialized, "Object not initialized"
@@ -384,10 +386,12 @@ class ArticulatedObject:
                 per_env_len = demo_lengths[self.env_demo_idx]
                 demo_goal_t = torch.minimum(self.episode_length_buf + 1, per_env_len - 1)
                 goal_states = self.all_demo_states[self.env_demo_idx, demo_goal_t]
+                self.goal_target[:] = goal_states
             else:
                 demo_goal_t = torch.where(
                     self.episode_length_buf >= self.num_demo_frames - 1, self.num_demo_frames - 1, self.episode_length_buf + 1)
                 goal_states = self.demo_states[demo_goal_t]
+                self.goal_target[:] = goal_states
             self.state_diff[:] = goal_states - torch.cat(
                 [self.root_pos, self.root_quat, self.dof_pos], dim=-1)
     
@@ -407,6 +411,7 @@ class ArticulatedObject:
             "state_diff": self.state_diff,
             "root_ang_vel": self.root_ang_vel,
             "root_lin_vel": self.root_lin_vel, 
+            "goal_pos": self.goal_target,
         }
         for k, scale in self.obs_scale.items():
             if k in obs_dict:
@@ -425,6 +430,7 @@ class ArticulatedObject:
             root_lin_vel_dim=3,
             dof_pos_dim=self.num_joints, 
             state_diff_dim=8,
+            goal_target_dim=8,
         )
         return sum(dims.values()), dims
 

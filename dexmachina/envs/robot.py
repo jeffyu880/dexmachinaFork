@@ -568,6 +568,7 @@ class BaseRobot:
             "dof_vel": self.dof_vel,
             "kpt_pos": self.kpt_pos.view(self.num_envs, -1),
             "wrist_pose": self.wrist_pose, 
+            "goal_pos": self.curr_targets,
         }
 
         for k, scale in self.obs_scale.items():
@@ -577,11 +578,12 @@ class BaseRobot:
     
     def compute_obs_dim(self): 
         dims = dict( 
-            qpos_dim = self.ndof,   
-            qpos_target_dim = self.ndof,
-            qvel_dim = self.ndof,
-            kpt_dim = int(len(self.kpt_link_names) * 3),  
-            wrist_dim = 7, 
+            qpos_dim = self.ndof,       #   dof_pos
+            qpos_target_dim = self.ndof,    # target pos diff
+            qvel_dim = self.ndof,   # dof vel
+            kpt_dim = int(len(self.kpt_link_names) * 3),    # kpt_pos
+            wrist_dim = 7,      # wrist pose
+            goal_dim = self.ndof,   # goal pos   
         )
         return sum(dims.values()), dims
 

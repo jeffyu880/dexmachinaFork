@@ -2,7 +2,7 @@
 set -o pipefail
 
 # Retry configuration
-MAX_RETRIES=50
+MAX_RETRIES=5
 RETRY_COUNT=0
 SUCCESS=false
 
@@ -27,7 +27,7 @@ PARAM_FILE="training_params_multi_demo_$(date +%Y%m%d_%H%M%S).txt"
 # Define parameters once as associative arrays
 declare -A PARAMS=(
     [batch_size]="-B 1"      # should be the num_envs
-    [epochs]="-obf -obt --max_epochs 10"
+    [epochs]="-obf -obt --max_epochs 30"
     [object]="--actuate_object --retarget_name para --horizon 32"
     [learning]="-imw 0.5 --learning_rate 0.0003"
     [curriculum]="--gain_mode all --curr_schedule uniform --wait_epochs 200 --num_zero_epoch 500"
@@ -36,26 +36,28 @@ declare -A PARAMS=(
     [task_rewards]="--task_rew_betas 10 1 5 --action_penalty 0.01 --dialback_ep_len 30"
     [thresholds]="--aux_reset_thres 0 0 0 --curr_rew_thres 0.6 0 0 0"
     [training]="--skip_grad --deque_len 20 --save_freq 500 --use_retarget_contact"
-    [arm_model]="-am hybrid --hybrid_scales 0.1 1.0 --kp_init 80 --kv_init 5"
-    [weights]="-imi 0.2 -bc 0.2 -con 2.0 -ert 0.5"
+    [arm_model]="-am hybrid --hybrid_scales 0.1 1.0 --kp_init 100 --kv_init 5"
+    [weights]="-imi 0.2 -bc 0.2 -con 2.0 -ert 0.3"
     [experiment]="-exp allegro-multi-demo"
     [hand]="--hand allegro_hand"
     [seed]="--seed 24"
     [sampling]="--demo_sampling deterministic"
+    # [randomization]="--use_rand --rand_friction --rand_com --rand_mass"
     # [checkpoint]="--checkpoint /path/to/your/checkpoint.pth"
 )
 
 # Multiple demo clips for training.
 # Format: object-start-end[-subject][-use_clip]
 DEMOS=(
-    "ketchup-427-527-s02-u01"
-    "ketchup-30-130-s01-u01"
+    "ketchup-40-60-s02-u01"
+    "ketchup-30-50-s02-u03"
+    "ketchup-35-55-s02-u04"
 )
 
 # Build the training command once so we can log and execute the exact same args.
 CMD=(
     python dexmachina/rl/train_rl_multi_demo.py
-    --vis
+    # --vis
     ${PARAMS[batch_size]} ${PARAMS[epochs]}
     ${PARAMS[object]}
     ${PARAMS[learning]}
@@ -71,8 +73,9 @@ CMD=(
     ${PARAMS[hand]}
     ${PARAMS[seed]}
     ${PARAMS[sampling]}
-    --clips "${DEMOS[@]}"
+    ${PARAMS[randomization]}
     # ${PARAMS[checkpoint]}
+    --clips "${DEMOS[@]}"
 )
 
 # Generate PRETTY_CMD for easy logging/copy-paste.
