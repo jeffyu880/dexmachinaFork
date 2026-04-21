@@ -188,6 +188,7 @@ class BaseEnv:
         else:
             self.all_demo_names = list(all_demo_names)
         self.demo_log_names = [name.replace('/', '_').replace(' ', '_') for name in self.all_demo_names]
+        # self.current_demo_indices = [0 for _ in range(len(self.env_cfg))]
         self.current_demo_idx = 0
         self.demo_step_counts = [0 for _ in range(len(self.all_demo_data))]
         self.demo_switch_counts = [0 for _ in range(len(self.all_demo_data))]
@@ -660,7 +661,7 @@ class BaseEnv:
             control_force = robot.get_control_force()
             self.extras["log"][f"{side}_control_force"] = control_force.mean().item()
 
-        self.extras["log"]["demo/current_idx"] = int(self.current_demo_idx)
+        # self.extras["log"]["demo/current_idx"] = int(self.current_demo_idx)
         for i, demo_name in enumerate(self.demo_log_names):
             self.extras["log"][f"demo_steps/{demo_name}"] = float(self.demo_step_counts[i])
             self.extras["log"][f"demo_switches/{demo_name}"] = float(self.demo_switch_counts[i])
@@ -784,8 +785,8 @@ class BaseEnv:
                     self.cumulative_task_rew < self.early_reset_threshold * interval,
                     early_task_reset
                 )
-            if (early_task_reset & ~need_reset).any():
-                reset_reasons.append(f"early_reset_task: {(early_task_reset & ~need_reset).nonzero(as_tuple=False).squeeze(-1).tolist()}")
+            # if (early_task_reset & ~need_reset).any():
+            #     reset_reasons.append(f"early_reset_task: {(early_task_reset & ~need_reset).nonzero(as_tuple=False).squeeze(-1).tolist()}")
             need_reset = need_reset | early_task_reset
         
         for key, cum_rew in zip(
@@ -799,13 +800,13 @@ class BaseEnv:
                     aux_reset = torch.where(
                         (stepped_length > interval), cum_rew < thres * interval, aux_reset
                     )
-                if (aux_reset & ~need_reset).any():
-                    reset_reasons.append(f"early_reset_{key}: {(aux_reset & ~need_reset).nonzero(as_tuple=False).squeeze(-1).tolist()}")
+                # if (aux_reset & ~need_reset).any():
+                #     reset_reasons.append(f"early_reset_{key}: {(aux_reset & ~need_reset).nonzero(as_tuple=False).squeeze(-1).tolist()}")
                 need_reset = need_reset | aux_reset
         
         # Print reset reasons if any new resets triggered this step
-        if reset_reasons:
-            print(f"[DEMO {self.current_demo_idx}] Step {stepped_length.max().item()}: Resetting - {', '.join(reset_reasons)}")
+        # if reset_reasons:
+        #     print(f"[DEMO {self.current_demo_idx}] Step {stepped_length.max().item()}: Resetting - {', '.join(reset_reasons)}")
         
         return need_reset, timeout
     
@@ -951,7 +952,7 @@ class BaseEnv:
             else:
                 new_demo_idx = int(self.demo_rng.integers(0, len(self.all_demo_data)))
             if new_demo_idx != self.current_demo_idx:
-                print(f"[DEMO SWITCH] {self.current_demo_idx} -> {new_demo_idx} for envs {env_idxs.tolist()}")
+                # print(f"[DEMO SWITCH] {self.current_demo_idx} -> {new_demo_idx} for envs {env_idxs.tolist()}")
                 self.current_demo_idx = new_demo_idx
                 self.change_demo(
                     self.all_demo_data[new_demo_idx],
@@ -959,8 +960,8 @@ class BaseEnv:
                     reset_envs=False,  # Don't reset yet, we'll do it below
                     demo_idx=new_demo_idx
                 )
-            else:
-                print(f"[RESET] Keeping demo {self.current_demo_idx} for envs {env_idxs.tolist()}")
+            # else:
+                # print(f"[RESET] Keeping demo {self.current_demo_idx} for envs {env_idxs.tolist()}")
         
         self.randomization.on_reset_idx(env_idxs)
         progressed = self.episode_length_buf[env_idxs] - self.episode_start_buf[env_idxs]
@@ -970,7 +971,7 @@ class BaseEnv:
         # Debug: print episode rewards before reset
         if len(env_idxs) > 0 and self.use_curriculum:
             task_rew = self.cumulative_task_rew[env_idxs].mean().item()
-            print(f"[RESET DEBUG] Env {env_idxs[0]}: task_reward={task_rew:.2f}, progressed={progressed[0].item()}, threshold={self.early_reset_threshold}")
+            # print(f"[RESET DEBUG] Env {env_idxs[0]}: task_reward={task_rew:.2f}, progressed={progressed[0].item()}, threshold={self.early_reset_threshold}")
 
         if self.use_curriculum:
             episode_rewards = dict()
