@@ -304,9 +304,12 @@ class BaseRobot:
         self.residual_num_frames = num_frames
 
     def set_all_residual_qpos(self, all_retarget_data, side):
-        """Pre-load all demos' residual qpos as (num_demos, T, ndof) for per-env switching."""
+        """Pre-load all demos' residual qpos as (num_demos, T, ndof) for per-env switching.
+        CRITICAL: Must maintain 1-to-1 indexing with demo order (NO FILTERING).
+        """
         per_demo_qpos = []
         per_demo_lengths = []
+        first_valid_qpos = None
         for retarget_data in all_retarget_data:
             side_data = retarget_data.get(side, {})
             if 'residual_qpos' not in side_data:
@@ -569,6 +572,7 @@ class BaseRobot:
             "kpt_pos": self.kpt_pos.view(self.num_envs, -1),
             "wrist_pose": self.wrist_pose, 
             "goal_pos": self.curr_targets,
+            "previous_pos": self.prev_targets
         }
 
         for k, scale in self.obs_scale.items():
@@ -584,6 +588,7 @@ class BaseRobot:
             kpt_dim = int(len(self.kpt_link_names) * 3),    # kpt_pos
             wrist_dim = 7,      # wrist pose
             goal_dim = self.ndof,   # goal pos   
+            prev_goal_dim = self.ndof
         )
         return sum(dims.values()), dims
 
@@ -625,7 +630,7 @@ class BaseRobot:
             # joint_actions is -1, 1, make it center around init_qpos
             upper = joint_actions >= 0 
             scaled = torch.where(upper, joint_actions * upper_margin, joint_actions * lower_margin) # joint_actions has sign +-1!!
-            joint_targets = res_qpos + scaled
+            joint_targets = res_qpos    # DEBUG
 
         elif self.action_mode == "kinematic": # just all zeros
             assert self.residual_qpos is not None and self.residual_num_frames is not None, "Residual qpos not set"
@@ -700,6 +705,8 @@ class BaseRobot:
                 per_env_len = demo_lengths[self.env_demo_idx[env_idxs]]
                 starts = torch.minimum(episode_start, per_env_len - 1)
                 init_qpos = self.all_residual_qpos[self.env_demo_idx[env_idxs], starts]
+                demo_ids = self.env_demo_idx[env_idxs]
+                print(f"[RESET {self.name}] env_idxs={list(env_idxs)[:4]} demo_ids={demo_ids[:4].tolist()} starts={starts[:4].tolist()} all_qpos_shape={self.all_residual_qpos.shape}")
             else:
                 init_qpos = self.residual_qpos[episode_start]
         else:

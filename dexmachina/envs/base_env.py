@@ -183,6 +183,8 @@ class BaseEnv:
         # Multi-demo support: store all demos for reset-time sampling
         self.all_demo_data = all_demo_data if all_demo_data is not None else [demo_data]
         self.all_retarget_data = all_retarget_data if all_retarget_data is not None else [retarget_data]
+        print("All demo data")
+        print("All retarget data")
         if all_demo_names is None:
             self.all_demo_names = [f"demo_{i}" for i in range(len(self.all_demo_data))]
         else:
@@ -381,6 +383,8 @@ class BaseEnv:
             self.post_scene_build_setup()
         else:
             print("Scene created but not built yet") 
+            
+        self.steps_since_reset = 0;
             
     def build_scene(self):
         env_cfg = self.env_cfg
@@ -629,6 +633,8 @@ class BaseEnv:
         for k, obj in self.objects.items():
             obj.step()
             
+        self.steps_since_reset += 1
+        print("Steps since reset: ", self.steps_since_reset)
         self.randomization.on_step(self.episode_length_buf)
         self.scene.step()  
         self.episode_length_buf += 1
@@ -663,6 +669,8 @@ class BaseEnv:
         if len(reset_env_ids) > 0:
             # only log cum. episode reward if that env_idx is DONE 
             rew_dict['episode_rew'] = self.cumulative_task_rew[reset_env_ids] 
+            print("Resetting now: ", reset_env_ids)
+            self.steps_since_reset = 0
             self.reset_idx(reset_env_ids)  # rew and obs will be resetted   
         
         self.extras["log"].update(rew_dict) 
@@ -687,7 +695,7 @@ class BaseEnv:
         # self.extras["log"]["demo/current_idx"] = int(self.current_demo_idx)
         for i, demo_name in enumerate(self.demo_log_names):
             self.extras["log"][f"demo_steps/{demo_name}"] = float(self.demo_step_counts[i])
-            self.extras["log"][f"demo_switches/{demo_name}"] = float(self.demo_switch_counts[i])
+            # self.extras["log"][f"demo_switches/{demo_name}"] = float(self.demo_switch_counts[i])
 
         if self.record_video:
             self._render_headless()
@@ -737,6 +745,8 @@ class BaseEnv:
             reward_kwargs.update(
                 contact_forces=self.contact_forces
             )
+            
+        print("DEMO number: ", self.env_demo_idx)
         rewards, rew_dict = self.reward_module.compute_reward(
             **reward_kwargs,
             env_demo_idx=self.env_demo_idx,
@@ -794,11 +804,17 @@ class BaseEnv:
         # Track reset reasons for debugging
         reset_reasons = []
         if timeout.any():
-            reset_reasons.append(f"timeout: {timeout.nonzero(as_tuple=False).squeeze(-1).tolist()}")
+            timeout_envs = timeout.nonzero(as_tuple=False).squeeze(-1).tolist()
+            # reset_reasons.append(f"timeout: {timeout_envs}")
+            print(f"  [RESET] Timeout - Environments {timeout_envs} reached max episode length")
         if object_fell_off.any():
-            reset_reasons.append(f"fell_off: {object_fell_off.nonzero(as_tuple=False).squeeze(-1).tolist()}")
+            fell_off_envs = object_fell_off.nonzero(as_tuple=False).squeeze(-1).tolist()
+            # reset_reasons.append(f"fell_off: {fell_off_envs}")
+            print(f"  [RESET] Fell Off - Environments {fell_off_envs} object fell off table")
         if self.nan_envs.any():
-            reset_reasons.append(f"nan_envs: {self.nan_envs.nonzero(as_tuple=False).squeeze(-1).tolist()}")
+            nan_envs_list = self.nan_envs.nonzero(as_tuple=False).squeeze(-1).tolist()
+            # reset_reasons.append(f"nan_envs: {nan_envs_list}")
+            print(f"  [RESET] NaN State - Environments {nan_envs_list} encountered NaN values")
         
         if self.early_reset_threshold > 0.0:
             # early reset curriculum
@@ -809,8 +825,10 @@ class BaseEnv:
                     self.cumulative_task_rew < self.early_reset_threshold * interval,
                     early_task_reset
                 )
-            # if (early_task_reset & ~need_reset).any():
-            #     reset_reasons.append(f"early_reset_task: {(early_task_reset & ~need_reset).nonzero(as_tuple=False).squeeze(-1).tolist()}")
+            if (early_task_reset).any():
+                new_early_reset = (early_task_reset & ~need_reset).nonzero(as_tuple=False).squeeze(-1).tolist()
+                # reset_reasons.append(f"early_reset_task: curriculum_only={new_early_reset}")
+                print(f"  [RESET] Early Reset Curriculum - environment number {new_early_reset}")
             need_reset = need_reset | early_task_reset
         
         for key, cum_rew in zip(
@@ -824,13 +842,15 @@ class BaseEnv:
                     aux_reset = torch.where(
                         (stepped_length > interval), cum_rew < thres * interval, aux_reset
                     )
-                # if (aux_reset & ~need_reset).any():
-                #     reset_reasons.append(f"early_reset_{key}: {(aux_reset & ~need_reset).nonzero(as_tuple=False).squeeze(-1).tolist()}")
+                if (aux_reset & ~need_reset).any():
+                    aux_reset_envs = (aux_reset & ~need_reset).nonzero(as_tuple=False).squeeze(-1).tolist()
+                    # reset_reasons.append(f"early_reset_{key}: {aux_reset_envs}")
+                    print(f"  [RESET] Auxiliary Reset ({key.upper()}) - Environments {aux_reset_envs} underperforming")
                 need_reset = need_reset | aux_reset
         
         # Print reset reasons if any new resets triggered this step
         # if reset_reasons:
-        #     print(f"[DEMO {self.current_demo_idx}] Step {stepped_length.max().item()}: Resetting - {', '.join(reset_reasons)}")
+            # print(f"[DEMO {self.current_demo_idx}] Step {stepped_length.max().item()}: Resetting - {', '.join(reset_reasons)}")
         
         return need_reset, timeout
     
@@ -899,6 +919,7 @@ class BaseEnv:
         all_obs_dict = dict()
         for name, robot in self.robots.items():
             obs_dict = robot.get_observations()
+            print(obs_dict.keys())
             value_list.extend(list(obs_dict.values()))
             all_obs_dict[name] = obs_dict
         for name, obj in self.objects.items():
@@ -940,7 +961,7 @@ class BaseEnv:
         if self.observe_contact_force:
             force_norm = torch.norm(self.contact_forces, dim=-1) * 0.01 # scale down! max contact force can go to 1000+
             value_list.append(force_norm.flatten(start_dim=1))
-
+                    
         obs = torch.cat(value_list, dim=-1)
         self.obs_dict = all_obs_dict
         # if sum(torch.isnan(obs).flatten()) > 0:
@@ -965,6 +986,7 @@ class BaseEnv:
         return avg_rew.mean().item()
 
     def reset_idx(self, env_idxs=[]):
+        # env_idxs: list of environments to reset: 
         if len(env_idxs) == 0:
             return
         
@@ -982,12 +1004,11 @@ class BaseEnv:
                     dtype=torch.long, device=self.device
                 )
             # track switch counts
-            for i, env_idx in enumerate(env_idxs):
-                old = self.env_demo_idx[env_idx].item()
-                new = new_demo_idxs[i].item()
-                if new != old:
-                    self.demo_switch_counts[new] += 1
-            self.env_demo_idx[env_idxs] = new_demo_idxs
+            # for i, env_idx in enumerate(env_idxs):
+            #     old = self.env_demo_idx[env_idx].item()
+            #     new = new_demo_idxs[i].item()
+            #     if new != old:
+            #         self.demo_switch_counts[new] += 1
         
         self.randomization.on_reset_idx(env_idxs)
         progressed = self.episode_length_buf[env_idxs] - self.episode_start_buf[env_idxs]

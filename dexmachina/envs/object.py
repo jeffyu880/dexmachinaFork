@@ -444,15 +444,10 @@ class ArticulatedObject:
             assert episode_start.shape[0] == len(env_idxs), f"reset_episode_start.shape={episode_start.shape}"
         
         init_qpos = self.init_qpos
-        if episode_start is not None and torch.any(episode_start): # non-zero starts
-            if self.env_demo_idx is not None and self.all_demo_states is not None:
-                init_qpos = self.all_demo_states[self.env_demo_idx[env_idxs], episode_start, 7:8].clone()
-            else:
-                init_qpos = self.demo_states[episode_start, 7:8].clone()
-        
-        # try randomize the kp/kp
-        if env_idxs is None:
-            env_idxs = np.arange(self.num_envs)
+        if episode_start is not None and self.env_demo_idx is not None and self.all_demo_states is not None:
+            init_qpos = self.all_demo_states[self.env_demo_idx[env_idxs], episode_start, 7:8].clone()
+        elif episode_start is not None and torch.any(episode_start): # non-zero starts, single demo
+            init_qpos = self.demo_states[episode_start, 7:8].clone()
         
         if self.actuated and reset_gains:
             dof_idxs = [i for i in range(7)]
@@ -475,11 +470,10 @@ class ArticulatedObject:
             envs_idx=env_idxs,
         )
         init_pos = self.init_pos
-        if episode_start is not None and torch.any(episode_start):
-            if self.env_demo_idx is not None and self.all_demo_states is not None:
-                init_pos = self.all_demo_states[self.env_demo_idx[env_idxs], episode_start, :3].clone()
-            else:
-                init_pos = self.demo_states[episode_start, :3].clone()
+        if episode_start is not None and self.env_demo_idx is not None and self.all_demo_states is not None:
+            init_pos = self.all_demo_states[self.env_demo_idx[env_idxs], episode_start, :3].clone()
+        elif episode_start is not None and torch.any(episode_start):
+            init_pos = self.demo_states[episode_start, :3].clone()
         self.root_pos[env_idxs, :] = init_pos
         self.entity.set_pos(
             pos=self.root_pos[env_idxs],
@@ -487,11 +481,10 @@ class ArticulatedObject:
         )
 
         init_quat = self.init_quat
-        if episode_start is not None and torch.any(episode_start):
-            if self.env_demo_idx is not None and self.all_demo_states is not None:
-                init_quat = self.all_demo_states[self.env_demo_idx[env_idxs], episode_start, 3:7].clone()
-            else:
-                init_quat = self.demo_states[episode_start, 3:7].clone()
+        if episode_start is not None and self.env_demo_idx is not None and self.all_demo_states is not None:
+            init_quat = self.all_demo_states[self.env_demo_idx[env_idxs], episode_start, 3:7].clone()
+        elif episode_start is not None and torch.any(episode_start):
+            init_quat = self.demo_states[episode_start, 3:7].clone()
         self.root_quat[env_idxs, :] = init_quat
         self.entity.set_quat(
             quat=self.root_quat[env_idxs],

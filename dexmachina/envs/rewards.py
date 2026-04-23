@@ -139,7 +139,11 @@ class RewardModule:
         return self.demo_length
 
     def load_all_demos(self, all_demo_data, all_retarget_data, device):
-        """Pre-load all demos as (num_demos, T, feat) tensors for per-env switching."""
+        """
+            Pre-load all demos as (num_demos, T, feat) tensors for per-env switching.
+            T: # of timesteps for a demonstration
+            feat: features to track for rewards
+        """
         per_demo_tensors = []
         self.all_demo_lengths = []
         for demo_data, retarget_data in zip(all_demo_data, all_retarget_data):
@@ -151,13 +155,22 @@ class RewardModule:
             self.all_demo_tensors[key] = torch.stack([t[key] for t in per_demo_tensors], dim=0)
         self.demo_tensors = {k: v for k, v in per_demo_tensors[0].items()}
         self.demo_length = self.all_demo_lengths[0]
+        print(len(self.all_demo_tensors['obj_pos']))
+        print(self.all_demo_lengths)
 
     def match_demo_state(self, demo_key, episode_length_buf, env_demo_idx=None):
+        '''
+            Returns demo data for each environment at its current timestep
+            demo_key: obj_pos, obj_quat, or obj_arti "string"
+            episode_length_buf: tensor tracking the current timestep for each envionrment in the parallel batch
+            env_demo_idx: the index for what demo to use (int)
+        '''
         """ returns shape (num_envs, num_features) """
         if env_demo_idx is not None and hasattr(self, 'all_demo_tensors'):
+            # print("In match_demo_state: Using multi demo")
             assert demo_key in self.all_demo_tensors, f"Key {demo_key} not in all_demo_tensors"
             demo_lengths = torch.tensor(self.all_demo_lengths, device=episode_length_buf.device, dtype=episode_length_buf.dtype)
-            per_env_len = demo_lengths[env_demo_idx]
+            per_env_len = demo_lengths[env_demo_idx]        # technically not needed since all demos have the same lengths
             demo_t = torch.minimum(episode_length_buf, per_env_len - 1)
             return self.all_demo_tensors[demo_key][env_demo_idx, demo_t]
         assert demo_key in self.demo_tensors, f"Key {demo_key} not found in demo_tensors"
@@ -170,6 +183,7 @@ class RewardModule:
             task_rew = torch.zeros(episode_length_buf.shape, device=episode_length_buf.device)
             return task_rew, dict(task_rew=task_rew)
         
+        print("Computing task reward for demo: ", env_demo_idx)
         demo_arti = self.match_demo_state("obj_arti", episode_length_buf, env_demo_idx)
         pos_dist = position_distance(obj_pos, demo_pos)
         rot_dist = rotation_distance(obj_quat, demo_quat)
