@@ -49,8 +49,8 @@ declare -A PARAMS=(
 # Multiple demo clips for training.
 # Format: object-start-end[-subject][-use_clip]
 DEMOS=(
-    "ketchup-25-125-s05-u01"
-    "ketchup-300-400-s02-u01"
+    "ketchup-25-27-s05-u01"
+    # "ketchup-300-400-s02-u01"
     # "ketchup-30-50-s02-u03"
     # "ketchup-35-55-s02-u04"
 )

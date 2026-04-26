@@ -90,6 +90,7 @@ def load_multi_demo_data_separate(clip_list, args, device, exp_name, timestamp):
             args.frame_start = start
             args.frame_end = end
             env_cfg = get_all_env_cfg(args, device=device)
+            args.randomize_observations = True
             base_env_cfg = {k: v for k, v in env_cfg.items() if k not in ['demo_data', 'retarget_data']}
             demo_data = env_cfg['demo_data']
             retarget_data = env_cfg['retarget_data']

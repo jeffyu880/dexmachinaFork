@@ -130,6 +130,7 @@ def get_all_env_cfg(args, device, load_retarget_data=True):
   
 
     for side in ['left', 'right']: 
+        robot_cfgs[side]['randomize_observations'] = args.randomize_observations
         robot_cfgs[side]['num_demos'] = args.num_demos
         robot_cfgs[side]['initial_pos'] = [0.0, 0.0, 0.8]       # avoid hand colliding with box
         robot_cfgs[side]['multi_demo'] = args.multi_demo
@@ -309,6 +310,7 @@ def get_common_argparser():
     parser.add_argument('--demo_sampling', type=str, default='random', choices=['random', 'deterministic'])
     
     parser.add_argument('--use_rand', '-rand', action='store_true')
+    parser.add_argument('--randomize_observations', '-rand_obs', action='store_true')
     parser.add_argument('--rand_friction', '-rf', action='store_true')
     parser.add_argument('--rand_com', '-rc', action='store_true')
     parser.add_argument('--rand_mass', '-rm', action='store_true')

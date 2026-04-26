@@ -10,8 +10,30 @@ import importlib
 from dexmachina.asset_utils import get_urdf_path
 
 @torch.jit.script
-def unscale(x, lower, upper): 
+def unscale(x, lower, upper):
     return (2.0 * x - upper - lower) / (upper - lower + 1e-5)
+
+@torch.jit.script
+def quat_multiply(q1: torch.Tensor, q2: torch.Tensor) -> torch.Tensor:
+    # [w, x, y, z] convention
+    w1, x1, y1, z1 = q1[:, 0], q1[:, 1], q1[:, 2], q1[:, 3]
+    w2, x2, y2, z2 = q2[:, 0], q2[:, 1], q2[:, 2], q2[:, 3]
+    return torch.stack([
+        w1*w2 - x1*x2 - y1*y2 - z1*z2,
+        w1*x2 + x1*w2 + y1*z2 - z1*y2,
+        w1*y2 - x1*z2 + y1*w2 + z1*x2,
+        w1*z2 + x1*y2 - y1*x2 + z1*w2,
+    ], dim=-1)
+
+@torch.jit.script
+def perturb_quat(quat: torch.Tensor, noise_std: float) -> torch.Tensor:
+    """Apply isotropic rotation noise via exponential map. quat is [w, x, y, z]."""
+    omega = torch.randn(quat.shape[0], 3, device=quat.device) * noise_std
+    theta = omega.norm(p=2, dim=-1, keepdim=True).clamp(min=1e-8)
+    axis = omega / theta
+    half_theta = theta / 2.0
+    q_noise = torch.cat([torch.cos(half_theta), torch.sin(half_theta) * axis], dim=-1)
+    return quat_multiply(q_noise, quat)
 
 def get_hand_specific_cfg(name="inspire_hand"):
     hand_prefix = name.replace("_hand", "") # xhand still stays xhand
@@ -54,6 +76,7 @@ def get_default_robot_cfg(name="inspire_hand", side="left", wrist_only=True, gro
         "res_cap": False, # if True, use hybrid_scales to also cap residual wrist actions
         "show_keypoints": False,
         "visualization": True,
+        "randomize_observations": False
     }
     assert side in ["left", "right"], f"Invalid side {side}"
     # NOTE robot_cfg['wrist_link_name'] should match retargeting results 
@@ -262,6 +285,14 @@ class BaseRobot:
         if self.collect_data:
             print(f"Collecting data for {self.name}")
         self.episode_data = defaultdict(list) 
+
+        # randomize observations
+        self.randomize_observations = self.cfg.get("randomize_obs", False)
+        if self.randomize_observations:
+            self.max_joint_angle_noise = 1.01 # radians
+            self.max_joint_pos_noise = 1.001 # meters
+            self.max_joint_vel_noise = 1.001 # meters/second
+
         
         ### MULTI DEMO DATA STRUCTURES
         self.all_residual_qpos = None       # stores all demo trajectories of joint positions over time (ndemos, T, ndof)
@@ -622,6 +653,7 @@ class BaseRobot:
         # repeat default init pos
         self.curr_targets = self.init_qpos.clone()
         self.prev_targets = self.init_qpos.clone()
+        self.prev_dof_pos = self.init_qpos.clone()
         self.curr_res_qpos = self.init_qpos.clone()
 
         # track keypoint links 
@@ -633,7 +665,7 @@ class BaseRobot:
 
     def update_value_buffers(self):
         assert self.initialized, "Robot not initialized"
-        entity = self.entity 
+        entity = self.entity
         self.dof_pos[:] = entity.get_dofs_position(self.actuated_dof_idxs)
         self.dof_vel[:] = entity.get_dofs_velocity(self.actuated_dof_idxs)
 
@@ -667,14 +699,32 @@ class BaseRobot:
                 self.dof_limits[:, 0],
                 self.dof_limits[:, 1],
             ),
-            "dof_vel": self.dof_vel,
+            "dof_vel": self.dof_velz,
             "kpt_pos": self.kpt_pos.view(self.num_envs, -1),
             "wrist_pose": self.wrist_pose, 
             "goal_pos": self.curr_targets,
-            "previous_pos": self.prev_targets
+            "previous_pos": self.prev_dof_pos
         }
 
-        for k, scale in self.obs_scale.items():
+        if self.randomize_observations:
+            # randomize the kpt_pos, wrist_pos, dof_pos
+            noisy_dof_pos = self.dof_pos + torch.randn_like(self.dof_pos) * self.max_joint_angle_noise
+            obs_dict["dof_pos"] = unscale(noisy_dof_pos, self.dof_limits[:, 0], self.dof_limits[:, 1])
+            obs_dict["dof_target_pos"] = obs_dict["dof_target_pos"] + torch.randn_like(obs_dict["dof_target_pos"]) * self.max_joint_angle_noise
+            obs_dict["kpt_pos"] = obs_dict["kpt_pos"] + torch.randn_like(obs_dict["kpt_pos"]) * self.max_joint_pos_noise
+            wrist_pos_noise = torch.randn(self.num_envs, 3, device=self.device) * self.max_joint_pos_noise
+            noisy_quat = perturb_quat(self.wrist_pose[:, 3:], self.max_joint_angle_noise)
+            obs_dict["wrist_pose"] = torch.cat([self.wrist_pose[:, :3] + wrist_pos_noise, noisy_quat], dim=-1)
+            print(f"[obs noise] dof_pos[0]:       clean={self.dof_pos[0].cpu().numpy().round(4)}  noisy={noisy_dof_pos[0].cpu().numpy().round(4)}")
+            print(f"[obs noise] dof_target_pos[0]: clean={(self.curr_targets - self.dof_pos)[0].cpu().numpy().round(4)}  noisy={obs_dict['dof_target_pos'][0].cpu().numpy().round(4)}")
+            print(f"[obs noise] kpt_pos[0]:        clean={self.kpt_pos.view(self.num_envs, -1)[0].cpu().numpy().round(4)}  noisy={obs_dict['kpt_pos'][0].cpu().numpy().round(4)}")
+            print(f"[obs noise] wrist_pos[0]:      clean={self.wrist_pose[0, :3].cpu().numpy().round(4)}  noisy={obs_dict['wrist_pose'][0, :3].cpu().numpy().round(4)}")
+            print(f"[obs noise] wrist_quat[0]:     clean={self.wrist_pose[0, 3:].cpu().numpy().round(4)}  noisy={noisy_quat[0].cpu().numpy().round(4)}")
+            self.prev_dof_pos[:] = noisy_dof_pos        # update the previous_dof_pos
+        else:
+            self.prev_dof_pos[:] = self.dof_pos
+
+        for k, scale in self.obs_scale.items():         # scales the observations to make different magnitudes closer to be more policy friendly 
             if k in obs_dict:
                 obs_dict[k] *= scale 
         return obs_dict  
@@ -822,6 +872,7 @@ class BaseRobot:
         
         self.curr_targets[env_idxs, :] = init_qpos.clone()
         self.prev_targets[env_idxs, :] = init_qpos.clone()
+        self.prev_dof_pos[env_idxs, :] = init_qpos.clone()
         self.curr_res_qpos[env_idxs, :] = init_qpos.clone()
         # avoid doing this it it might NaN  
         self.entity.set_dofs_position(
