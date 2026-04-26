@@ -310,6 +310,7 @@ def get_common_argparser():
     parser.add_argument('--chunk_ep_length', '-chunk', type=int, default=-1)
     parser.add_argument('--demo_sampling', type=str, default='random', choices=['random', 'deterministic'])
     parser.add_argument('--multi_demo', '-md', action='store_true', help='Use multiple demos for training')
+    parser.add_argument('--num_demos', '-nd', type=int, default=1, help='Number of demos to use for training')
     
     parser.add_argument('--use_rand', '-rand', action='store_true')
     parser.add_argument('--randomize_observations', '-rand_obs', action='store_true')
