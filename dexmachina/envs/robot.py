@@ -287,11 +287,11 @@ class BaseRobot:
         self.episode_data = defaultdict(list) 
 
         # randomize observations
-        self.randomize_observations = self.cfg.get("randomize_obs", False)
+        self.randomize_observations = self.cfg.get("randomize_observations", False)
         if self.randomize_observations:
-            self.max_joint_angle_noise = 1.01 # radians
-            self.max_joint_pos_noise = 1.001 # meters
-            self.max_joint_vel_noise = 1.001 # meters/second
+            self.max_joint_angle_noise = 0.01 # radians
+            self.max_joint_pos_noise = 0.001 # meters
+            self.max_joint_vel_noise = 0.001 # meters/second
 
         
         ### MULTI DEMO DATA STRUCTURES
@@ -699,7 +699,7 @@ class BaseRobot:
                 self.dof_limits[:, 0],
                 self.dof_limits[:, 1],
             ),
-            "dof_vel": self.dof_velz,
+            "dof_vel": self.dof_vel,
             "kpt_pos": self.kpt_pos.view(self.num_envs, -1),
             "wrist_pose": self.wrist_pose, 
             "goal_pos": self.curr_targets,
@@ -715,11 +715,11 @@ class BaseRobot:
             wrist_pos_noise = torch.randn(self.num_envs, 3, device=self.device) * self.max_joint_pos_noise
             noisy_quat = perturb_quat(self.wrist_pose[:, 3:], self.max_joint_angle_noise)
             obs_dict["wrist_pose"] = torch.cat([self.wrist_pose[:, :3] + wrist_pos_noise, noisy_quat], dim=-1)
-            print(f"[obs noise] dof_pos[0]:       clean={self.dof_pos[0].cpu().numpy().round(4)}  noisy={noisy_dof_pos[0].cpu().numpy().round(4)}")
-            print(f"[obs noise] dof_target_pos[0]: clean={(self.curr_targets - self.dof_pos)[0].cpu().numpy().round(4)}  noisy={obs_dict['dof_target_pos'][0].cpu().numpy().round(4)}")
-            print(f"[obs noise] kpt_pos[0]:        clean={self.kpt_pos.view(self.num_envs, -1)[0].cpu().numpy().round(4)}  noisy={obs_dict['kpt_pos'][0].cpu().numpy().round(4)}")
-            print(f"[obs noise] wrist_pos[0]:      clean={self.wrist_pose[0, :3].cpu().numpy().round(4)}  noisy={obs_dict['wrist_pose'][0, :3].cpu().numpy().round(4)}")
-            print(f"[obs noise] wrist_quat[0]:     clean={self.wrist_pose[0, 3:].cpu().numpy().round(4)}  noisy={noisy_quat[0].cpu().numpy().round(4)}")
+            # print(f"[obs noise] dof_pos[0]:       clean={self.dof_pos[0].cpu().numpy().round(4)}  noisy={noisy_dof_pos[0].cpu().numpy().round(4)}")
+            # print(f"[obs noise] dof_target_pos[0]: clean={(self.curr_targets - self.dof_pos)[0].cpu().numpy().round(4)}  noisy={obs_dict['dof_target_pos'][0].cpu().numpy().round(4)}")
+            # print(f"[obs noise] kpt_pos[0]:        clean={self.kpt_pos.view(self.num_envs, -1)[0].cpu().numpy().round(4)}  noisy={obs_dict['kpt_pos'][0].cpu().numpy().round(4)}")
+            # print(f"[obs noise] wrist_pos[0]:      clean={self.wrist_pose[0, :3].cpu().numpy().round(4)}  noisy={obs_dict['wrist_pose'][0, :3].cpu().numpy().round(4)}")
+            # print(f"[obs noise] wrist_quat[0]:     clean={self.wrist_pose[0, 3:].cpu().numpy().round(4)}  noisy={noisy_quat[0].cpu().numpy().round(4)}")
             self.prev_dof_pos[:] = noisy_dof_pos        # update the previous_dof_pos
         else:
             self.prev_dof_pos[:] = self.dof_pos
