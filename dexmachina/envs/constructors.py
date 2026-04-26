@@ -146,6 +146,7 @@ def get_all_env_cfg(args, device, load_retarget_data=True):
         obj_name: get_arctic_object_cfg(name=obj_name, convexify=args.convexify_object, texture_mesh=args.texture_object)
     } 
     object_cfgs[obj_name]['multi_demo'] = args.multi_demo
+    object_cfgs[obj_name]['randomize_obs'] = args.randomize_observations
     if args.actuate_object:
         object_cfgs[obj_name]['actuated'] = True
         object_cfgs[obj_name]['kp'] = args.kp_init 

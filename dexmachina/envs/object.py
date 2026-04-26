@@ -6,7 +6,8 @@ import genesis as gs
 from os.path import join
 from collections import defaultdict
 
-from dexmachina.envs.math_utils import matrix_from_quat 
+from dexmachina.envs.math_utils import matrix_from_quat
+from dexmachina.envs.robot import perturb_quat 
 from dexmachina.asset_utils import get_asset_path
 
 
@@ -183,6 +184,9 @@ class ArticulatedObject:
         self.initialized = True
         self.obs_dim, self.obs_dims = self.compute_obs_dim()
         self.episode_length_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.int32)
+        self.randomize_observations = self.cfg.get("randomize_obs", False)
+        self.max_pos_noise = 0.001   # 0.1 cm in meters
+        self.max_angle_noise = 0.01  # radians
 
         self.collect_data = self.cfg.get("collect_data", False)
         if self.collect_data:
@@ -407,19 +411,28 @@ class ArticulatedObject:
         return nan_envs
         
     def get_observations(self):
-        assert self.initialized, "Object not initialized" 
-        obs_dict = { 
+        assert self.initialized, "Object not initialized"
+        obs_dict = {
             "parts_pos": self.part_pos.flatten(start_dim=1),
             "parts_quat": self.part_quat.flatten(start_dim=1),
-            "dof_pos": self.dof_pos, 
+            "dof_pos": self.dof_pos,
             "state_diff": self.state_diff,
             "root_ang_vel": self.root_ang_vel,
-            "root_lin_vel": self.root_lin_vel, 
+            "root_lin_vel": self.root_lin_vel,
             "goal_pos": self.goal_target,
         }
+
+        if self.randomize_observations:
+            obs_dict["parts_pos"] = obs_dict["parts_pos"] + torch.randn_like(obs_dict["parts_pos"]) * self.max_pos_noise
+            noisy_parts_quat = perturb_quat(self.part_quat.flatten(end_dim=1), self.max_angle_noise)
+            obs_dict["parts_quat"] = noisy_parts_quat.view(self.num_envs, -1)
+            obs_dict["dof_pos"] = obs_dict["dof_pos"] + torch.randn_like(obs_dict["dof_pos"]) * self.max_angle_noise
+            obs_dict["root_ang_vel"] = obs_dict["root_ang_vel"] + torch.randn_like(obs_dict["root_ang_vel"]) * self.max_angle_noise
+            obs_dict["root_lin_vel"] = obs_dict["root_lin_vel"] + torch.randn_like(obs_dict["root_lin_vel"]) * self.max_pos_noise
+
         for k, scale in self.obs_scale.items():
             if k in obs_dict:
-                obs_dict[k] *= scale 
+                obs_dict[k] *= scale
         return obs_dict  
 
     def get_part_pose(self, part='top'):
