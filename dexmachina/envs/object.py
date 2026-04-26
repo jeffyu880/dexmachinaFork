@@ -423,6 +423,7 @@ class ArticulatedObject:
         }
 
         if self.randomize_observations:
+            # print("random")
             obs_dict["parts_pos"] = obs_dict["parts_pos"] + torch.randn_like(obs_dict["parts_pos"]) * self.max_pos_noise
             noisy_parts_quat = perturb_quat(self.part_quat.flatten(end_dim=1), self.max_angle_noise)
             obs_dict["parts_quat"] = noisy_parts_quat.view(self.num_envs, -1)

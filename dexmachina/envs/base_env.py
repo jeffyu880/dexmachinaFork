@@ -668,7 +668,6 @@ class BaseEnv:
         if len(reset_env_ids) > 0:
             # only log cum. episode reward if that env_idx is DONE 
             rew_dict['episode_rew'] = self.cumulative_task_rew[reset_env_ids] 
-            print("Resetting now: ", reset_env_ids)
             self.steps_since_reset = 0
             self.reset_idx(reset_env_ids)  # rew and obs will be resetted   
         
@@ -801,15 +800,15 @@ class BaseEnv:
         if timeout.any():
             timeout_envs = timeout.nonzero(as_tuple=False).squeeze(-1).tolist()
             # reset_reasons.append(f"timeout: {timeout_envs}")
-            print(f"  [RESET] Timeout - Environments {timeout_envs} reached max episode length")
+            # print(f"  [RESET] Timeout - Environments {timeout_envs} reached max episode length")
         if object_fell_off.any():
             fell_off_envs = object_fell_off.nonzero(as_tuple=False).squeeze(-1).tolist()
             # reset_reasons.append(f"fell_off: {fell_off_envs}")
-            print(f"  [RESET] Fell Off - Environments {fell_off_envs} object fell off table")
+            # print(f"  [RESET] Fell Off - Environments {fell_off_envs} object fell off table")
         if self.nan_envs.any():
             nan_envs_list = self.nan_envs.nonzero(as_tuple=False).squeeze(-1).tolist()
             # reset_reasons.append(f"nan_envs: {nan_envs_list}")
-            print(f"  [RESET] NaN State - Environments {nan_envs_list} encountered NaN values")
+            # print(f"  [RESET] NaN State - Environments {nan_envs_list} encountered NaN values")
         
         if self.early_reset_threshold > 0.0:
             # early reset curriculum
@@ -823,7 +822,7 @@ class BaseEnv:
             if (early_task_reset).any():
                 new_early_reset = (early_task_reset & ~need_reset).nonzero(as_tuple=False).squeeze(-1).tolist()
                 # reset_reasons.append(f"early_reset_task: curriculum_only={new_early_reset}")
-                print(f"  [RESET] Early Reset Curriculum - environment number {new_early_reset}")
+                # print(f"  [RESET] Early Reset Curriculum - environment number {new_early_reset}")
             need_reset = need_reset | early_task_reset
         
         for key, cum_rew in zip(
@@ -840,7 +839,7 @@ class BaseEnv:
                 if (aux_reset & ~need_reset).any():
                     aux_reset_envs = (aux_reset & ~need_reset).nonzero(as_tuple=False).squeeze(-1).tolist()
                     # reset_reasons.append(f"early_reset_{key}: {aux_reset_envs}")
-                    print(f"  [RESET] Auxiliary Reset ({key.upper()}) - Environments {aux_reset_envs} underperforming")
+                    # print(f"  [RESET] Auxiliary Reset ({key.upper()}) - Environments {aux_reset_envs} underperforming")
                 need_reset = need_reset | aux_reset
         
         # Print reset reasons if any new resets triggered this step
