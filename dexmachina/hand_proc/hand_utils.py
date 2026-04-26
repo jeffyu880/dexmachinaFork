@@ -33,7 +33,25 @@ def parse_clip_string(clip):
     use_clip = vals[4].replace('u', '') # just 01/02
     return obj_name, start, end, subject, use_clip
 
+def quaternion_multiply(q1, q2):
+    """Multiply two quaternions: q1 * q2"""
+    w1, x1, y1, z1 = q1
+    w2, x2, y2, z2 = q2
+    return (
+        w1*w2 - x1*x2 - y1*y2 - z1*z2,
+        w1*x2 + x1*w2 + y1*z2 - z1*y2,
+        w1*y2 - x1*z2 + y1*w2 + z1*x2,
+        w1*z2 + x1*y2 - y1*x2 + z1*w2,
+    )
 
+def is_duplicate_rotation(quat, quat_list, tolerance=1e-5):
+    """Check if quaternion matches any in list (handle q and -q equivalence)"""
+    for existing in quat_list:
+        # Quaternions q and -q represent same rotation
+        dot = sum(a*b for a, b in zip(quat, existing))
+        if abs(abs(dot) - 1.0) < tolerance:
+            return True
+    return False
 
 def generate_90degree_rotation_quaternions(max_combined_rotations=2):
     """

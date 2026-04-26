@@ -19,13 +19,13 @@ echo "Using hand: $HAND"
 
 # Array of demonstrations with their sequences and user numbers
 demonstrations=(
-    # "s01:2"
-    # "s02:1,3,4"
+    # "s01:1"
+    "s02:1,3,4"
     # "s04:2"
     # "s05:1"
     # "s06:1,2"
     # "s07:2"
-    "s08:3"
+    # "s08:3"
     # "s09:1,2,3,4"
     # "s10:1,2"
 )
@@ -76,8 +76,11 @@ for demo in "${demonstrations[@]}"; do
             python retargeting/map_contacts.py \
                 --hand "$HAND" \
                 --load_fname "$FNAME" \
+                --num_markers 30 \
+                --show_object \
+                --vis_scene \
                 --record_video \
-                --num_markers 30
+                --render_only
 
             if [ $? -eq 0 ]; then
                 echo "✓ Completed: $FNAME"

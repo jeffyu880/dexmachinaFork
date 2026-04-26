@@ -53,7 +53,7 @@ This command trains a bimanual dexterous manipulation agent using:
 ```bash
 -obf -obt                  # Observe contact force & tip distance
 -am hybrid                 # Hybrid action mode
---hybrid_scales 0.1 1.0    # Scaling for hybrid actions
+--hybrid_scales 0.04 0.5   # Wrist scaling: translation and rotation
 ```
 
 | Arg | Type | Value | Meaning |
@@ -61,12 +61,19 @@ This command trains a bimanual dexterous manipulation agent using:
 | `-obf` / `--observe_contact_force` | flag | ON | Include contact forces in agent observation |
 | `-obt` / `--observe_tip_dist` | flag | ON | Include fingertip distances in observation |
 | `-am` / `--action_mode` | str | `hybrid` | Action space: `residual` (delta), `absolute` (target), `hybrid` (both) |
-| `--hybrid_scales` | float list | `[0.1, 1.0]` | Scale factors for hybrid actions (residual scale, absolute scale) |
+| `--hybrid_scales` | float list | `[0.04, 0.5]` | Wrist scaling: [translation_scale, rotation_scale] for residual control |
 
 **Action modes:**
 - `absolute`: direct joint position targets
 - `residual`: delta from current state
-- `hybrid`: mix of both (0.1× residual + 1.0× absolute)
+- `hybrid`: **Wrist joints (6 DOF) use residual control** with scaling; **finger joints use absolute control**
+
+**Hybrid mode detail:**
+- **Wrist translation (first 3 DOF):** `target = curr_pos + scale_trans × action` (default ±0.04)
+- **Wrist rotation (last 3 DOF):** `target = curr_pos + scale_rot × action` (default ±0.5 radians)
+- **Finger joints:** `target = action × (upper_limit - lower_limit)` (absolute, full range)
+
+This combines the stability of residual control for wrist fine-tuning with the directness of absolute control for finger manipulation.
 
 ---
 
@@ -125,35 +132,35 @@ Total = 0.3 × imitation_reward
 ### 6. **Curriculum Learning (Progressive Difficulty)**
 
 ```bash
---curr_schedule uniform    # Gain progression schedule: uniform over time
+--curr_schedule uniform    # Schedule type for curriculum decay: exp or uniform
 --wait_epochs 100          # Wait 100 epochs before starting curriculum
---fixed_mode uniform       # Fixed curriculum mode: uniform distribution
---gain_mode all            # Which gains to adjust: all (kp, kv, force_range)
---uniform_mode slow        # Uniform curriculum speed: slow progression
+--fixed_mode uniform       # Decay mode when schedule=fixed: exp, lin, or uniform
+--gain_mode all            # Which gains to adjust: all (kp, kv, force_range), kpkv, or fr
+--uniform_mode slow        # Speed of uniform decay: slow (less decay per step) or fast (more decay)
 ```
 
 | Arg | Type | Value | Meaning |
 |-----|------|-------|---------|
-| `--curr_schedule` | str | `uniform` | Schedule type: `fixed` (no progression), `exp` (exponential), `uniform` (linear) |
+| `--curr_schedule` | str | `uniform` | Schedule type: `fixed` (no decay), `exp` (exponential decay), `uniform` (uniform decay distribution) |
 | `--wait_epochs` | int | 100 | Don't adjust gains for first 100 epochs |
-| `--fixed_mode` | str | `uniform` | Mode when schedule=fixed: `exp`, `lin`, `uniform` |
+| `--fixed_mode` | str | `uniform` | Decay mode when schedule=fixed: `exp` (exponential), `lin` (linear), `uniform` (uniform) |
 | `--gain_mode` | str | `all` | Which gains to adjust: `all` (kp+kv+force), `kpkv`, `fr` (force only) |
-| `--uniform_mode` | str | `slow` | Speed of uniform progression: `slow`, `fast` |
+| `--uniform_mode` | str | `slow` | Speed of uniform decay: `slow` (gentle decay), `fast` (aggressive decay) |
 
 **Gain ranges (defaults, can adjust):**
-- `--kp_init 80` → `--upper_ratios 0.9` → max kp increases 90% over training
-- `--kv_init 5` → `--lower_ratios 0.8` → min kv stays at 80% of init
+- `--kp_init 80` → `--upper_ratios 0.9` → max kp multiplied by 0.9 each curriculum update (decays 10% per step)
+- `--kv_init 5` → `--lower_ratios 0.6` → min kv multiplied by 0.6 each curriculum update (decays 40% per step)
 - `--force_range_init` → adjusts force control limits
 
-**Purpose:** Start with weak gains (easier to control), gradually increase (harder task).
+**Purpose:** Start with strong gains (easier to control), gradually decay gains (harder task due to weaker controller response).
 
 ---
 
 ### 7. **Advanced Curriculum Parameters**
 
 ```bash
---upper_ratios 0.9 0.9 1   # Max gain multipliers: kp, kv, force_range
---lower_ratios 0.8 0.8 1   # Min gain multipliers: kp, kv, force_range
+--upper_ratios 0.9 0.9 1   # Decay multipliers for upper bound: kp, kv, force_range (new = current × ratio)
+--lower_ratios 0.8 0.8 1   # Decay multipliers for lower bound: kp, kv, force_range (new = current × ratio)
 --curr_rew_thres 0.6 0.01 0.01 0.01  # Task, contact, imitation, BC reward thresholds
 --aux_reset_thres 0 0 0    # Auxiliary reset thresholds: contact, imitation, BC
 --deque_len 30             # Reward history length for curriculum decisions
@@ -162,8 +169,8 @@ Total = 0.3 × imitation_reward
 
 | Arg | Type | Value | Meaning |
 |-----|------|-------|---------|
-| `--upper_ratios` | float list | `[0.9, 0.9, 1]` | Max multiplier per gain: how high gains can go |
-| `--lower_ratios` | float list | `[0.8, 0.8, 1]` | Min multiplier per gain: minimum allowed value |
+| `--upper_ratios` | float list | `[0.9, 0.9, 1]` | Decay multipliers per gain: `new_gain = current_gain × ratio` per curriculum update |
+| `--lower_ratios` | float list | `[0.8, 0.8, 1]` | Decay multipliers for lower bound: `new_lower = current_lower × ratio` per update |
 | `--curr_rew_thres` | float list | `[0.6, 0.01, 0.01, 0.01]` | Reward thresholds to trigger curriculum updates |
 | `--aux_reset_thres` | float list | `[0, 0, 0]` | Extra reset conditions: contact, imitation, BC |
 | `--deque_len` | int | 30 | Window size for reward smoothing |

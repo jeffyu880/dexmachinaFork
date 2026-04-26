@@ -26,7 +26,7 @@ PARAM_FILE="training_params_multi_demo_$(date +%Y%m%d_%H%M%S).txt"
 
 # Define parameters once as associative arrays
 declare -A PARAMS=(
-    [batch_size]="-B 1"      # should be the num_envs
+    [batch_size]="-B 3"      # should be the num_envs
     [epochs]="-obf -obt --max_epochs 30"
     [object]="--actuate_object --retarget_name para --horizon 32"
     [learning]="-imw 0.5 --learning_rate 0.0003"
@@ -36,7 +36,7 @@ declare -A PARAMS=(
     [task_rewards]="--task_rew_betas 10 1 5 --action_penalty 0.01 --dialback_ep_len 30"
     [thresholds]="--aux_reset_thres 0 0 0 --curr_rew_thres 0.6 0 0 0"
     [training]="--skip_grad --deque_len 20 --save_freq 500 --use_retarget_contact"
-    [arm_model]="-am hybrid --hybrid_scales 0.1 1.0 --kp_init 100 --kv_init 5"
+    [arm_model]="-am residual --hybrid_scales 0.1 1.0 --kp_init 100 --kv_init 5"
     [weights]="-imi 0.2 -bc 0.2 -con 2.0 -ert 0.3"
     [experiment]="-exp allegro-multi-demo"
     [hand]="--hand allegro_hand"
@@ -49,9 +49,10 @@ declare -A PARAMS=(
 # Multiple demo clips for training.
 # Format: object-start-end[-subject][-use_clip]
 DEMOS=(
-    "ketchup-40-60-s02-u01"
-    "ketchup-30-50-s02-u03"
-    "ketchup-35-55-s02-u04"
+    "ketchup-25-125-s05-u01"
+    "ketchup-300-400-s02-u01"
+    # "ketchup-30-50-s02-u03"
+    # "ketchup-35-55-s02-u04"
 )
 
 # Build the training command once so we can log and execute the exact same args.
