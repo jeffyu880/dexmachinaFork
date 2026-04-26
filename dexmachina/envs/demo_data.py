@@ -1,8 +1,9 @@
-import os 
-import sys 
-import torch  
-import numpy as np 
+import os
+import sys
+import torch
+import numpy as np
 from os.path import join
+from functools import lru_cache
 from dexmachina.asset_utils import get_asset_path
 
 ARCTIC_PROCESSED_DIR = get_asset_path("arctic/processed")
@@ -56,6 +57,7 @@ def get_joint_init_limits(joint_pos_dict):
         default_qpos[k] = v[0] 
     return limits, default_qpos
  
+@lru_cache(maxsize=None)
 def load_genesis_retarget_data(
     obj_name="box",
     hand_name='inspire_hand',
@@ -66,6 +68,15 @@ def load_genesis_retarget_data(
     subject_name="s01",
     given_data_fname=None,
 ):
+    ''' retarget_data is a dict containing a dict for left and right hands
+        for each hand there is  init_qpos=init_pos, 
+                                limits=limits, 
+                                residual_qpos=sliced_qpos,
+                                qpos_targets=qpos_targets,
+                                num_frames=num_frames,
+                                kpts_data=kpt_info,
+                                wrist_pose=wrist_pose, # need this for contact frame reward
+    '''
     """ data saved from new retargeting code """
     ret_type = "vector"
     if 'shadow' in hand_name:
@@ -129,8 +140,9 @@ def load_genesis_retarget_data(
             kpts_data=kpt_info,
             wrist_pose=wrist_pose, # need this for contact frame reward
             ) 
-    return demo_data, retarget_data
+    return demo_data, retarget_data         # returns (2,) one per hand
 
+@lru_cache(maxsize=None)
 def load_contact_retarget_data(
     obj_name="box",
     hand_name='inspire_hand',
@@ -155,3 +167,7 @@ def load_contact_retarget_data(
         retar_contact[side] = {key: data[key] for key in ["collision_link_names", "collision_link_local_idxs"]}
         
     return retar_contact
+
+# class Multi_Demo():
+#     def __init__():
+#         # stores a list of the retargeted contacts, demo_data, retargeted_data

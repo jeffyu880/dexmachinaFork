@@ -15,8 +15,9 @@ from rl_games.common.algo_observer import IsaacAlgoObserver
 from rl_games.torch_runner import Runner 
 
 from dexmachina.asset_utils import get_rl_config_path
-from dexmachina.envs.base_env import BaseEnv 
+from dexmachina.envs.base_env import BaseEnv
 from dexmachina.envs.constructors import get_common_argparser, get_all_env_cfg, parse_clip_string
+from dexmachina.envs.demo_data import get_demo_data, load_genesis_retarget_data
 from dexmachina.rl.rl_games_wrapper import RlGamesVecEnvWrapper, RlGamesGpuEnv
 
 
@@ -50,7 +51,11 @@ def dump_yaml(filename: str, data: dict | object, sort_keys: bool = False):
         yaml.dump(data, f, default_flow_style=False, sort_keys=sort_keys)
 
 def load_multi_demo_data_separate(clip_list, args, device, exp_name, timestamp):
-    """Load multiple demonstration clips separately."""
+    """Load multiple demonstration clips separately.
+
+    Builds base_env_cfg once from the first clip, then loads only demo/retarget
+    data for the remaining clips without constructing a new BaseEnv per clip.
+    """
     all_demo_data = []
     all_retarget_data = []
     base_env_cfg = None
@@ -68,33 +73,50 @@ def load_multi_demo_data_separate(clip_list, args, device, exp_name, timestamp):
         "Demonstrations used:",
         "-" * 80,
     ]
-    
+
+    args.multi_demo = True
+    args.num_demos = len(clip_list)
+
     print(f"\n[INFO] Loading {len(clip_list)} demonstrations (separate)...")
     for i, clip in enumerate(clip_list, 1):
         print(f"  [{i}] Loading {clip}...")
-        
-        # Parse clip string
+
         obj_name, start, end, subject_name, use_clip = parse_clip_string(clip)
-        
-        # Set args for this clip
-        args.clip = clip
-        args.arctic_object = obj_name
-        args.frame_start = start
-        args.frame_end = end
-        
-        # Load data for this clip
-        env_cfg = get_all_env_cfg(args, device=device)
-        
-        # Save base environment config from first clip (contains robot_cfgs, object_cfgs, reward_cfg, etc.)
-        if base_env_cfg is None:
+
+        if i == 1:
+            # Build full env config once from the first clip
+            args.clip = clip
+            args.arctic_object = obj_name
+            args.frame_start = start
+            args.frame_end = end
+            env_cfg = get_all_env_cfg(args, device=device)
             base_env_cfg = {k: v for k, v in env_cfg.items() if k not in ['demo_data', 'retarget_data']}
-        
-        demo_data = env_cfg['demo_data']
-        retarget_data = env_cfg['retarget_data']
-        
+            demo_data = env_cfg['demo_data']
+            retarget_data = env_cfg['retarget_data']
+        else:
+            # Only load demo/retarget data for subsequent clips
+            _, retarget_data = load_genesis_retarget_data(
+                obj_name=obj_name,
+                hand_name=args.hand,
+                frame_start=start,
+                frame_end=end,
+                save_name=args.retarget_name,
+                use_clip=use_clip,
+                subject_name=subject_name,
+            )
+            demo_data = get_demo_data(
+                obj_name=obj_name,
+                hand_name=args.hand,
+                frame_start=start,
+                frame_end=end,
+                use_clip=use_clip,
+                subject_name=subject_name,
+                load_retarget_contact=args.use_retarget_contact,
+            )
+
         all_demo_data.append(demo_data)
         all_retarget_data.append(retarget_data)
-        
+
         num_frames = int(end) - int(start)
         total_frames += num_frames
         demo_info_lines.append(f"{i}. {clip}")
@@ -102,7 +124,7 @@ def load_multi_demo_data_separate(clip_list, args, device, exp_name, timestamp):
         demo_info_lines.append(f"   Subject: {subject_name}, Use_clip: {use_clip}")
         demo_info_lines.append("")
         print(f"       Loaded {num_frames} frames")
-    
+
     print(f"[INFO] Loaded {len(all_demo_data)} separate demonstrations")
     print(f"[INFO] Demos loaded for epoch-level sampling")
     demo_info_lines.extend([
@@ -118,7 +140,7 @@ def load_multi_demo_data_separate(clip_list, args, device, exp_name, timestamp):
     base_env_cfg['all_retarget_data'] = all_retarget_data
     base_env_cfg['all_demo_names'] = list(clip_list)
     print("\n" + "\n".join(demo_info_lines))
-    
+
     return all_demo_data, all_retarget_data, base_env_cfg, demo_info_lines
 
 

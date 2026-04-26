@@ -111,6 +111,7 @@ def get_all_env_cfg(args, device, load_retarget_data=True):
     env_cfg['rand_init_ratio'] = args.rand_init_ratio  
     env_cfg['chunk_ep_length'] = args.chunk_ep_length
     env_cfg['demo_sampling'] = args.demo_sampling
+    env_cfg['multi_demo'] = args.multi_demo
 
     if args.record_interval > 0 or args.record_video:
         env_cfg["record_video"] = True
@@ -126,7 +127,12 @@ def get_all_env_cfg(args, device, load_retarget_data=True):
         'left': get_default_robot_cfg(name=args.hand, side='left'),
         'right': get_default_robot_cfg(name=args.hand, side='right')
     }
+  
+
     for side in ['left', 'right']: 
+        robot_cfgs[side]['num_demos'] = args.num_demos
+        robot_cfgs[side]['initial_pos'] = [0.0, 0.0, 0.8]       # avoid hand colliding with box
+        robot_cfgs[side]['multi_demo'] = args.multi_demo
         robot_cfgs[side]['action_mode'] = args.action_mode
         robot_cfgs[side]['hybrid_scales'] = tuple(args.hybrid_scales)
         robot_cfgs[side]['res_cap'] = args.res_cap
@@ -138,6 +144,7 @@ def get_all_env_cfg(args, device, load_retarget_data=True):
     object_cfgs = {
         obj_name: get_arctic_object_cfg(name=obj_name, convexify=args.convexify_object, texture_mesh=args.texture_object)
     } 
+    object_cfgs[obj_name]['multi_demo'] = args.multi_demo
     if args.actuate_object:
         object_cfgs[obj_name]['actuated'] = True
         object_cfgs[obj_name]['kp'] = args.kp_init 

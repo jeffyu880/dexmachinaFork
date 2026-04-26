@@ -324,7 +324,7 @@ class BaseEnv:
                 sim=self.scene.sim,
                 rigid_solver=self.rigid_solver,
             )
-        cardbox_size = (0.2,0.2,0.1)
+        cardbox_size = (0.2,0.2,0.05)
         if self.n_objects == 1 and 'notebook' in self.object_names[0]:
             print("Adding a SMALLER cardboard box for notebook") 
             cardbox_size = (0.15, 0.15, 0.1) # wider: cardbox_size = (0.25, 0.2, 0.1)
@@ -461,12 +461,14 @@ class BaseEnv:
             self._set_camera(pos=cam_pos, lookat=lookat_pos, fov=30, name='front')
 
         if len(self.all_demo_data) > 1:
+            print("Using Multiple demo")
             self._setup_multi_demo()
 
     def _setup_multi_demo(self):
         """Pre-load all demos into subsystems and initialize per-env demo tracking."""
         self.reward_module.load_all_demos(self.all_demo_data, self.all_retarget_data, self.device)
         for side, robot in self.robots.items():
+            # robot.set_all_custom_init_qpos(self.all_retarget_data, side)
             robot.set_all_residual_qpos(self.all_retarget_data, side)
         if self.n_objects == 1:
             obj = self.objects[self.object_names[0]]
@@ -530,6 +532,7 @@ class BaseEnv:
         ep_len_dim = 1 #* 10
         obs_dim += ep_len_dim
 
+        print("observation dimention: ", obs_dim)
         # return 20, obs_idxs
         return obs_dim, obs_idxs
     
@@ -634,7 +637,7 @@ class BaseEnv:
             obj.step()
             
         self.steps_since_reset += 1
-        print("Steps since reset: ", self.steps_since_reset)
+        # print("Steps since reset: ", self.steps_since_reset)
         self.randomization.on_step(self.episode_length_buf)
         self.scene.step()  
         self.episode_length_buf += 1
@@ -746,7 +749,7 @@ class BaseEnv:
                 contact_forces=self.contact_forces
             )
             
-        print("DEMO number: ", self.env_demo_idx)
+        # print("DEMO number: ", self.env_demo_idx)
         rewards, rew_dict = self.reward_module.compute_reward(
             **reward_kwargs,
             env_demo_idx=self.env_demo_idx,
@@ -919,7 +922,7 @@ class BaseEnv:
         all_obs_dict = dict()
         for name, robot in self.robots.items():
             obs_dict = robot.get_observations()
-            print(obs_dict.keys())
+            # print(obs_dict.keys())
             value_list.extend(list(obs_dict.values()))
             all_obs_dict[name] = obs_dict
         for name, obj in self.objects.items():
@@ -994,22 +997,24 @@ class BaseEnv:
         if len(self.all_demo_data) > 1 and self.env_demo_idx is not None:
             num_demos = len(self.all_demo_data)
             if self.demo_sampling == 'deterministic':
-                new_indices = torch.arange(len(env_idxs), dtype=torch.long)
-                new_demo_idxs = (self.next_demo_idx + new_indices) % num_demos
-                self.next_demo_idx = (self.next_demo_idx + len(env_idxs)) % num_demos
-                new_demo_idxs = new_demo_idxs.to(self.device)
+                # new_indices = torch.arange(len(env_idxs), dtype=torch.long)
+                # new_demo_idxs = (self.next_demo_idx + new_indices) % num_demos
+                # self.next_demo_idx = (self.next_demo_idx + len(env_idxs)) % num_demos
+                # new_demo_idxs = new_demo_idxs.to(self.device)
+                new_demo_idxs = (self.env_demo_idx[env_idxs] + 1) % num_demos
+                self.env_demo_idx[env_idxs] = new_demo_idxs
             else:
                 new_demo_idxs = torch.tensor(
                     self.demo_rng.integers(0, num_demos, size=len(env_idxs)),
                     dtype=torch.long, device=self.device
                 )
+                self.env_demo_idx[env_idxs] = new_demo_idxs
             # track switch counts
             # for i, env_idx in enumerate(env_idxs):
             #     old = self.env_demo_idx[env_idx].item()
             #     new = new_demo_idxs[i].item()
             #     if new != old:
             #         self.demo_switch_counts[new] += 1
-        
         self.randomization.on_reset_idx(env_idxs)
         progressed = self.episode_length_buf[env_idxs] - self.episode_start_buf[env_idxs]
         progressed_avg = torch.mean(progressed.float()).item()
