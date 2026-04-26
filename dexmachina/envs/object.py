@@ -189,6 +189,7 @@ class ArticulatedObject:
             print("Collecting data from object")
         self.episode_data = defaultdict(list)
         self.post_built = False
+        self.multi_demo = self.cfg.get("multi_demo", False)
     
     def post_scene_build_setup(self):
         obj_cfg = self.cfg  
@@ -220,7 +221,7 @@ class ArticulatedObject:
         self.demo_states = np.concatenate([obj_pos, obj_quat, obj_arti], axis=1)
         self.demo_states = torch.tensor(self.demo_states, dtype=torch.float32, device=self.device)
         return base_pos, base_quat
-
+        
     def set_all_demo_states(self, all_demo_data):
         """Pre-load all demos' states as (num_demos, T, 8) for per-env switching."""
         per_demo_states = []
@@ -246,9 +247,12 @@ class ArticulatedObject:
                     demo_dofs.append(self.entity.get_dofs_position()[0])
                 all_dofs.append(torch.stack(demo_dofs, dim=0))
             self.all_demo_dofs = torch.stack(all_dofs, dim=0)
-        # restore to first demo
-        self.demo_states = per_demo_states[0]
-        self.num_demo_frames = per_demo_lengths[0]
+        # assign each env a fixed demo via round-robin
+        self.assign_env_demos_round_robin(len(all_demo_data))
+
+    def assign_env_demos_round_robin(self, num_demos):
+        """Assign each env a fixed demo index via round-robin: env i -> demo i % num_demos."""
+        self.env_demo_idx = torch.arange(self.num_envs, device=self.device) % num_demos
 
     def set_to_demo_step(self, step=0):
         assert self.demo_states is not None, "demo_states is None"
@@ -435,6 +439,9 @@ class ArticulatedObject:
         return sum(dims.values()), dims
 
     def reset_idx(self, env_idxs=None, episode_start=None, reset_gains=False):
+        # env_idxs: list of indexes to reset the object position
+        # episode_start: the frame to start the demo playback
+        # reset_gains: reset the curriculum gains
         assert self.initialized, "Object not initialized"
         if env_idxs is None:
             env_idxs = np.arange(self.num_envs)
@@ -443,7 +450,7 @@ class ArticulatedObject:
         if episode_start is not None:
             assert episode_start.shape[0] == len(env_idxs), f"reset_episode_start.shape={episode_start.shape}"
         
-        init_qpos = self.init_qpos
+        init_qpos = self.init_qpos      # actuation angle
         if episode_start is not None and self.env_demo_idx is not None and self.all_demo_states is not None:
             init_qpos = self.all_demo_states[self.env_demo_idx[env_idxs], episode_start, 7:8].clone()
         elif episode_start is not None and torch.any(episode_start): # non-zero starts, single demo
@@ -469,7 +476,7 @@ class ArticulatedObject:
             zero_velocity=True,
             envs_idx=env_idxs,
         )
-        init_pos = self.init_pos
+        init_pos = self.init_pos        # object position
         if episode_start is not None and self.env_demo_idx is not None and self.all_demo_states is not None:
             init_pos = self.all_demo_states[self.env_demo_idx[env_idxs], episode_start, :3].clone()
         elif episode_start is not None and torch.any(episode_start):
@@ -480,7 +487,7 @@ class ArticulatedObject:
             envs_idx=env_idxs,
         )
 
-        init_quat = self.init_quat
+        init_quat = self.init_quat      # object rotation
         if episode_start is not None and self.env_demo_idx is not None and self.all_demo_states is not None:
             init_quat = self.all_demo_states[self.env_demo_idx[env_idxs], episode_start, 3:7].clone()
         elif episode_start is not None and torch.any(episode_start):

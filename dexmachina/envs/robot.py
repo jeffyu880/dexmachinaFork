@@ -99,10 +99,13 @@ class BaseRobot:
         self.init_pos = torch.tensor(
             robot_cfg["base_init_pos"], dtype=torch.float32, device=self.device
         )
+        
+        print("INITIAL POSITION FOR ROBOT: ", self.init_pos)
         self.init_quat = torch.tensor(
             robot_cfg["base_init_quat"], dtype=torch.float32, device=self.device
         )
-        
+        print("INITIAL ROTATION FOR ROBOT: ", self.init_quat)
+
         self.action_mode = robot_cfg.get("action_mode", "residual")
         assert self.action_mode in ["residual", "absolute", "relative", "hybrid", "kinematic"], f"Invalid action mode {self.action_mode}"
         self.hybrid_scales = robot_cfg.get("hybrid_scales", (0.04, 0.5))
@@ -125,6 +128,8 @@ class BaseRobot:
             material=gs.materials.Rigid(gravity_compensation=robot_cfg["gravity_compensation"]),
             visualize_contact=visualize_contact,
         )
+        
+        # mimic joints are controlled together as a group, one action input controls multiple physical joints with optional scaling factors
         all_joints = self.entity.joints  
         self.actuated_joints = [joint for joint in all_joints if joint.type in [gs.JOINT_TYPE.REVOLUTE, gs.JOINT_TYPE.PRISMATIC]]
         self.actuated_dof_names = [joint.name for joint in self.actuated_joints]
@@ -167,8 +172,11 @@ class BaseRobot:
         qposes = torch.tensor(qposes, dtype=torch.float32, device=self.device)
         # repeat for each env
         self.init_qpos = qposes.unsqueeze(0).repeat(self.num_envs, 1) 
-        if 'init_qpos' in retarget_data: 
+        if 'init_qpos' in retarget_data and not robot_cfg['multi_demo']: 
+            print("Using custom init qpos")
             self.set_custom_init_qpos(retarget_data['init_qpos'])
+        else:
+            print("Skip settting custom init qpos using multiple demos")
       
         self.is_eval = is_eval
         if self.is_eval and self.num_envs > 1:
@@ -196,6 +204,7 @@ class BaseRobot:
             print(f"Overwrite kpt_link_names with saved retarget data")
             link_names = retarget_data['kpts_data']['kpt_names']
         
+        print("LINK NAMES: ", link_names)
         self.set_kpt_links(link_names)
 
         self.kpt_markers = []
@@ -217,19 +226,18 @@ class BaseRobot:
         assert len(wrist_link_idxs) == 1, f"Found {len(wrist_link_idxs)} wrist links"
         self.wrist_link_idx = wrist_link_idxs[0]
 
-        self.residual_qpos = None
-        self.residual_num_frames = None
-        self.all_residual_qpos = None
-        self.all_residual_num_frames = None
-        self.env_demo_idx = None
+        self.residual_qpos = None       # stores a trajectory of joint positions over time (T, ndof)
+        self.residual_num_frames = None  # number of frames in single demo trajectory
+      
+        self.env_demo_idx = None  # which demo each environment follows
         if 'residual_qpos' in retarget_data:
             qpos_targets = None
             if self.cfg.get("use_saved_targets", False):
-                qpos_targets = retarget_data.get('qpos_targets', None)
+                qpos_targets = retarget_data.get('qpos_targets', None)          # qpos_targets are the PD targets, which are coming from the physics simulator
                 assert qpos_targets is not None, "Need to set qpos_targets for residual action mode"
             self.set_residual_qpos(
                 num_frames=retarget_data['num_frames'],
-                residual_qpos_dict=retarget_data['residual_qpos'],
+                residual_qpos_dict=retarget_data['residual_qpos'],          # residual_qpos is the kinematic pose, the inverse kinematics retargeting
                 qpos_targets_dict=qpos_targets,
             )
         if self.action_mode == "relative":
@@ -237,6 +245,7 @@ class BaseRobot:
             self.set_relative_step_size(self.residual_qpos)
 
         if 'limits' in retarget_data:
+            print("custom limits")
             self.set_custom_joint_limits(retarget_data['limits'])
          
         self.n_links = self.entity.n_links 
@@ -253,6 +262,13 @@ class BaseRobot:
         if self.collect_data:
             print(f"Collecting data for {self.name}")
         self.episode_data = defaultdict(list) 
+        
+        ### MULTI DEMO DATA STRUCTURES
+        self.all_residual_qpos = None       # stores all demo trajectories of joint positions over time (ndemos, T, ndof)
+        self.all_residual_num_frames = None  # list of frame counts for each demo (the same)
+        self.all_init_qpos = torch.zeros(robot_cfg.get("num_demos", 1), qposes.shape[0], device=self.device, dtype=torch.float32)  # (num_demos, ndof)
+        # self.all_dof_limits = torch.tensor(dof_limits, dtype=torch.float32, device=self.device)      # stores all joint limits for each demo   shape (ndemos, num_joints, 2), should be the same per demo
+        # self.all_dof_range = self.dof_limits[:, 1] - self.dof_limits[:, 0] # shape (ndemos, num_joints,)
     
     def get_collision_groups(self):
         return self.cfg.get("collision_groups", dict())
@@ -269,7 +285,7 @@ class BaseRobot:
         self.n_kpts = len(self.kpt_link_names)
         return 
     
-    def set_custom_init_qpos(self, joint_qpos: Dict):
+    def set_custom_init_qpos(self, joint_qpos: Dict, demo_idx=None):                # takes the initial 
         curr_qpos = self.init_qpos.clone() # shape (num_envs, ndof)
         for jname, qpos in joint_qpos.items():
             if not jname in self.actuated_dof_names:
@@ -279,43 +295,81 @@ class BaseRobot:
             if not isinstance(qpos, torch.Tensor):
                 qpos = torch.tensor(qpos, dtype=torch.float32, device=self.device)
             curr_qpos[:, idx] = qpos.clone().to(self.device)
-        self.init_qpos = curr_qpos 
-        self.curr_targets = curr_qpos.clone()
+        if demo_idx is not None:
+            self.all_init_qpos[demo_idx] = curr_qpos[0]     # set_custom_init_qpos sets for all the enviornments 
+            print("SET ALL INIT QPOS SUCCESSFULLY")
+            # self.all_curr_targets[demo_idx] = curr_qpos.clone()       # this is set at reset_idx
+        else:
+            self.init_qpos = curr_qpos 
+            self.curr_targets = curr_qpos.clone()        
     
     def set_residual_qpos(self, num_frames, residual_qpos_dict: Dict, qpos_targets_dict=None): # v.shape is (num_frames, 1)
         # assert self.initialized, "Robot not initialized" 
         # need to set shape (num_frames, ndof), don't repeat for the env dim
         # init_qpos is shape (num_envs, ndof)!!
-        residual_qpos = self.init_qpos[0].clone().unsqueeze(0).repeat(num_frames, 1)
-        qpos_dict = residual_qpos_dict
+        residual_qpos = self.init_qpos[0].clone().unsqueeze(0).repeat(num_frames, 1)     # (num_frames, ndof)   # initializes a list of poses that are just the repeated of the first pose
+        qpos_dict = residual_qpos_dict      # kinematically retargeted joint positoins
         if qpos_targets_dict is not None:
-            qpos_dict = qpos_targets_dict
+            qpos_dict = qpos_targets_dict       # joint controller target trajectories
+        touched_dof_idxs = set()
         for jname, qpos in qpos_dict.items():
             assert qpos.shape[0] == num_frames, f"qpos.shape[0]={qpos.shape[0]} != {num_frames}"
             if not jname in self.actuated_dof_names:
                 print(f"WARNING: {jname} not in actuated joints")
                 breakpoint()
-            dof_idx = self.actuated_dof_names.index(jname) 
+            dof_idx = self.actuated_dof_names.index(jname)
             if isinstance(qpos, np.ndarray):
                 residual_qpos[:, dof_idx] = torch.tensor(qpos, dtype=torch.float32, device=self.device)
             else:
                 residual_qpos[:, dof_idx] = qpos.to(self.device)
+            touched_dof_idxs.add(dof_idx)
+        untouched = [self.actuated_dof_names[i] for i in range(self.ndof) if i not in touched_dof_idxs]
+        if untouched:
+            print(f"[set_residual_qpos] {len(untouched)} joints frozen at init_qpos: {untouched}")
         self.residual_qpos = residual_qpos
         self.residual_num_frames = num_frames
 
     def set_all_residual_qpos(self, all_retarget_data, side):
         """Pre-load all demos' residual qpos as (num_demos, T, ndof) for per-env switching.
         CRITICAL: Must maintain 1-to-1 indexing with demo order (NO FILTERING).
+        
+        Args:
+            all_retarget_data: List of retarget data dicts for all demos
+            side: 'left' or 'right' hand
         """
-        per_demo_qpos = []
-        per_demo_lengths = []
-        first_valid_qpos = None
-        for retarget_data in all_retarget_data:
+        # Step 1: Collect trajectory data from each demo
+        per_demo_qpos = []          # List of (T, ndof) tensors for each demo
+        per_demo_lengths = []       # List of trajectory lengths per demo
+        per_demo_init_qpos = []     # List of init positions (frame 0) per demo
+        per_demo_dof_limits = []    # List of (ndof, 2) joint limit tensors per demo
+        first_valid_qpos = None     # Placeholder trajectory for missing demos
+        first_valid_init_qpos = None  # Placeholder init position for missing demos
+        first_valid_dof_limits = None  # Placeholder limits for missing demos
+        missing_demos = []          # Track which demos have missing data
+
+        original_init_qpos = self.init_qpos.clone()
+        original_dof_limits = self.dof_limits.clone()
+
+        for demo_idx, retarget_data in enumerate(all_retarget_data):
             side_data = retarget_data.get(side, {})
+
+            # Handle missing trajectory data (e.g., retargeting failed for this demo)
             if 'residual_qpos' not in side_data:
                 per_demo_qpos.append(None)
                 per_demo_lengths.append(0)
+                per_demo_init_qpos.append(None)  # Keep lists aligned with demo indices
+                per_demo_dof_limits.append(None)
+                missing_demos.append(demo_idx)
                 continue
+
+            # Reset to base limits/init, then apply this demo's overrides
+            self.dof_limits = original_dof_limits.clone()
+            if 'init_qpos' in side_data:
+                self.set_custom_init_qpos(side_data['init_qpos'], demo_idx)
+            if 'limits' in side_data:
+                self.set_custom_joint_limits(side_data['limits'])
+
+            # Load trajectory data for this demo
             qpos_targets = None
             if self.cfg.get("use_saved_targets", False):
                 qpos_targets = side_data.get('qpos_targets', None)
@@ -324,15 +378,43 @@ class BaseRobot:
                 residual_qpos_dict=side_data['residual_qpos'],
                 qpos_targets_dict=qpos_targets,
             )
+
+            # Store trajectory and its metadata
             per_demo_qpos.append(self.residual_qpos.clone())
             per_demo_lengths.append(side_data['num_frames'])
+            per_demo_init_qpos.append(self.residual_qpos[0].clone())  # First frame = init position
+            print("First element inside demo_init_qpos: ", self.residual_qpos[0].clone())
+            per_demo_dof_limits.append(self.dof_limits.clone())     # the limits are the same across the same hand regardless of demo
+            
+
+        # Restore to pre-loop state
+        self.init_qpos = original_init_qpos
+        self.dof_limits = original_dof_limits
+        self.dof_range = self.dof_limits[:, 1] - self.dof_limits[:, 0]
+
+        # Early return if all demos are missing
         if all(q is None for q in per_demo_qpos):
             return
-        self.all_residual_qpos = torch.stack([q for q in per_demo_qpos if q is not None], dim=0)
-        self.all_residual_num_frames = [l for l in per_demo_lengths if l > 0]
-        # restore to first demo
+
+        self.all_residual_qpos = torch.stack(per_demo_qpos, dim=0)   # (num_demos, T, ndof)
+        self.all_residual_num_frames = per_demo_lengths
+        self.assign_env_demos_round_robin(len(per_demo_qpos))
+        print("NO PADDING NEEDED")
+        return
+        
+        # Step 3: Restore single-demo references for backward compatibility
+        # These point to the first demo by default
         self.residual_qpos = self.all_residual_qpos[0]
         self.residual_num_frames = self.all_residual_num_frames[0]
+
+        # Step 4: Log diagnostics
+        if len(missing_demos) > 0:
+            print(f"[{side.upper()} QPOS] WARNING: Demos {missing_demos} are MISSING trajectory data - padded with demo 0")
+        print(f"[{side.upper()} QPOS] Loaded {len(per_demo_qpos)} demos, all_residual_qpos shape={self.all_residual_qpos.shape}, all_init_qpos shape={self.all_init_qpos.shape}, lengths={self.all_residual_num_frames}")
+
+    def assign_env_demos_round_robin(self, num_demos):
+        """Assign each env a fixed demo index via round-robin: env i -> demo i % num_demos."""
+        self.env_demo_idx = torch.arange(self.num_envs, device=self.device) % num_demos
 
     def smooth_residual_qpos(self, joint_idxs=None):
         """
@@ -376,6 +458,23 @@ class BaseRobot:
 
     def set_custom_joint_limits(self, joint_limits_dict: Dict):
         """ NOTE: skip finger joints """
+        joint_limits = self.dof_limits.clone()
+        for jname, limit in joint_limits_dict.items():
+            if not jname in self.actuated_dof_names:
+                print(f"WARNING: {jname} not in actuated joints")
+                continue
+            if 'forearm' not in jname:
+                # only setting wrist joints
+                continue 
+            idx = self.actuated_dof_names.index(jname)
+            joint_limits[idx] = torch.tensor(limit, dtype=torch.float32, device=self.device)
+        
+        # if demo_idx is not None:
+            
+        # self.dof_limits = joint_limits
+        # self.dof_range = self.dof_limits[:, 1] - self.dof_limits[:, 0] # shape (num_joints,) 
+        
+    def multi_demo_change_custom_joint_limits(self, joint_limits_dict: Dict):       # not needed as the joint limits are the same per hand
         joint_limits = self.dof_limits.clone()
         for jname, limit in joint_limits_dict.items():
             if not jname in self.actuated_dof_names:
@@ -630,7 +729,7 @@ class BaseRobot:
             # joint_actions is -1, 1, make it center around init_qpos
             upper = joint_actions >= 0 
             scaled = torch.where(upper, joint_actions * upper_margin, joint_actions * lower_margin) # joint_actions has sign +-1!!
-            joint_targets = res_qpos    # DEBUG
+            joint_targets = res_qpos  + scaled  # DEBUG
 
         elif self.action_mode == "kinematic": # just all zeros
             assert self.residual_qpos is not None and self.residual_num_frames is not None, "Residual qpos not set"
@@ -706,12 +805,16 @@ class BaseRobot:
                 starts = torch.minimum(episode_start, per_env_len - 1)
                 init_qpos = self.all_residual_qpos[self.env_demo_idx[env_idxs], starts]
                 demo_ids = self.env_demo_idx[env_idxs]
+                self.residual_qpos = self.all_residual_qpos[demo_ids]       # setting the qpos for the enviornment to the demo
+                # self.residual_num_frames = self.all_residual_num_frames[demo_ids]   # setting the demo residual frames to the correct value
                 print(f"[RESET {self.name}] env_idxs={list(env_idxs)[:4]} demo_ids={demo_ids[:4].tolist()} starts={starts[:4].tolist()} all_qpos_shape={self.all_residual_qpos.shape}")
             else:
                 init_qpos = self.residual_qpos[episode_start]
+        elif self.env_demo_idx is not None and self.all_init_qpos is not None:
+            init_qpos = self.all_init_qpos[self.env_demo_idx[env_idxs]].float()
         else:
-            init_qpos = self.init_qpos[env_idxs] 
-        
+            init_qpos = self.init_qpos[env_idxs]
+
         self.dof_pos[env_idxs, :] = init_qpos
         self.dof_vel[env_idxs, :] = 0.0
         if self.is_eval and self.num_envs > 1:

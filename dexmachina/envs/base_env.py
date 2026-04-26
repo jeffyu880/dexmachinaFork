@@ -465,21 +465,17 @@ class BaseEnv:
             self._setup_multi_demo()
 
     def _setup_multi_demo(self):
-        """Pre-load all demos into subsystems and initialize per-env demo tracking."""
+        """Pre-load all demos into subsystems and assign envs via round-robin."""
+        num_demos = len(self.all_demo_data)
         self.reward_module.load_all_demos(self.all_demo_data, self.all_retarget_data, self.device)
+        self.reward_module.assign_env_demos_round_robin(self.num_envs, self.device)
         for side, robot in self.robots.items():
-            # robot.set_all_custom_init_qpos(self.all_retarget_data, side)
-            robot.set_all_residual_qpos(self.all_retarget_data, side)
+            robot.set_all_residual_qpos(self.all_retarget_data, side)  # calls assign_env_demos_round_robin internally
         if self.n_objects == 1:
             obj = self.objects[self.object_names[0]]
-            obj.set_all_demo_states(self.all_demo_data)
-        num_demos = len(self.all_demo_data)
-        self.env_demo_idx = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
-        for side, robot in self.robots.items():
-            robot.env_demo_idx = self.env_demo_idx
-        if self.n_objects == 1:
-            self.objects[self.object_names[0]].env_demo_idx = self.env_demo_idx
-        print(f"[MULTI-DEMO] Pre-loaded {num_demos} demos for per-env switching")
+            obj.set_all_demo_states(self.all_demo_data)  # calls assign_env_demos_round_robin internally
+        self.env_demo_idx = self.reward_module.env_demo_idx
+        print(f"[MULTI-DEMO] Pre-loaded {num_demos} demos, round-robin assignment: {self.env_demo_idx.tolist()}")
 
     def setup_actions(self, robots: Dict[str, BaseRobot]):
         action_dim = 0 
@@ -749,11 +745,7 @@ class BaseEnv:
                 contact_forces=self.contact_forces
             )
             
-        # print("DEMO number: ", self.env_demo_idx)
-        rewards, rew_dict = self.reward_module.compute_reward(
-            **reward_kwargs,
-            env_demo_idx=self.env_demo_idx,
-        )
+        rewards, rew_dict = self.reward_module.compute_reward(**reward_kwargs)
         
         if not self.use_rl_games:
             # scale the reward by 0.1 manually to match the scale in rl_games
@@ -871,7 +863,7 @@ class BaseEnv:
                 _pos = _pos[:, self.num_left_contact_links:]
 
         else:        
-            _pos = self.reward_module.match_demo_state(f'contact_links_{side}', self.episode_length_buf, self.env_demo_idx) # (N, 2*nlinks, 4) -> last dim is part id
+            _pos = self.reward_module.match_demo_state(f'contact_links_{side}', self.episode_length_buf) # (N, 2*nlinks, 4) -> last dim is part id
             part_id = 2 if part == 'bottom' else 1
             if len(_pos.shape) == 4:
                # for retargeted contact, the shape is (N, 2, nlinks, 4) 
@@ -993,28 +985,6 @@ class BaseEnv:
         if len(env_idxs) == 0:
             return
         
-        # Sample a new demo per env if multiple demos are available
-        if len(self.all_demo_data) > 1 and self.env_demo_idx is not None:
-            num_demos = len(self.all_demo_data)
-            if self.demo_sampling == 'deterministic':
-                # new_indices = torch.arange(len(env_idxs), dtype=torch.long)
-                # new_demo_idxs = (self.next_demo_idx + new_indices) % num_demos
-                # self.next_demo_idx = (self.next_demo_idx + len(env_idxs)) % num_demos
-                # new_demo_idxs = new_demo_idxs.to(self.device)
-                new_demo_idxs = (self.env_demo_idx[env_idxs] + 1) % num_demos
-                self.env_demo_idx[env_idxs] = new_demo_idxs
-            else:
-                new_demo_idxs = torch.tensor(
-                    self.demo_rng.integers(0, num_demos, size=len(env_idxs)),
-                    dtype=torch.long, device=self.device
-                )
-                self.env_demo_idx[env_idxs] = new_demo_idxs
-            # track switch counts
-            # for i, env_idx in enumerate(env_idxs):
-            #     old = self.env_demo_idx[env_idx].item()
-            #     new = new_demo_idxs[i].item()
-            #     if new != old:
-            #         self.demo_switch_counts[new] += 1
         self.randomization.on_reset_idx(env_idxs)
         progressed = self.episode_length_buf[env_idxs] - self.episode_start_buf[env_idxs]
         progressed_avg = torch.mean(progressed.float()).item()
@@ -1201,97 +1171,97 @@ class BaseEnv:
         print(f"[SAVED] Wrist trajectories to {output_file} ({file_size_kb:.1f} KB)")
         return output_file
 
-    def change_demo(self, demo_data, retarget_data, reset_envs=True, demo_idx=None):
-        """
-        Hot-swap demonstration data in the environment.
+    # def change_demo(self, demo_data, retarget_data, reset_envs=True, demo_idx=None):
+    #     """
+    #     Hot-swap demonstration data in the environment.
         
-        This method updates all references to the current demo, including:
-        - Reward module demo
-        - Object reference trajectory
-        - Hand tracking targets
-        - Environment reset
+    #     This method updates all references to the current demo, including:
+    #     - Reward module demo
+    #     - Object reference trajectory
+    #     - Hand tracking targets
+    #     - Environment reset
         
-        Args:
-            demo_data: New demonstration data dictionary
-            retarget_data: New retargeting data dictionary (hand joint targets)
-            reset_envs: Whether to reset all environments after demo change (default True)
-            demo_idx: Optional demo index for logging
-        """
-        self.demo_data = demo_data
-        self.retarget_data = retarget_data
+    #     Args:
+    #         demo_data: New demonstration data dictionary
+    #         retarget_data: New retargeting data dictionary (hand joint targets)
+    #         reset_envs: Whether to reset all environments after demo change (default True)
+    #         demo_idx: Optional demo index for logging
+    #     """
+    #     self.demo_data = demo_data
+    #     self.retarget_data = retarget_data
 
-        # Update reward module with new demo
-        self.reward_module.load_demo(demo_data, retarget_data, self.device)
-        self.demo_length = self.reward_module.get_demo_length()
+    #     # Update reward module with new demo
+    #     self.reward_module.load_demo(demo_data, retarget_data, self.device)
+    #     self.demo_length = self.reward_module.get_demo_length()
 
-        # Validate episode length vs demo length
-        if self.chunk_ep_length <= 0:
-            assert self.max_episode_length >= self.demo_length, (
-                f"Episode length {self.max_episode_length} must be >= demo length {self.demo_length}"
-            )
+    #     # Validate episode length vs demo length
+    #     if self.chunk_ep_length <= 0:
+    #         assert self.max_episode_length >= self.demo_length, (
+    #             f"Episode length {self.max_episode_length} must be >= demo length {self.demo_length}"
+    #         )
 
-        # Update object reference trajectory
-        if self.n_objects == 1:
-            obj = self.objects[self.object_names[0]]
-            obj.set_demo_states(demo_data)
-            obj.num_demo_frames = obj.demo_states.shape[0]
-            obj.init_pos = obj.demo_states[0, :3].clone()
-            obj.init_quat = obj.demo_states[0, 3:7].clone()
-            obj.init_qpos = obj.demo_states[0, 7:8].clone()
+    #     # Update object reference trajectory
+    #     if self.n_objects == 1:
+    #         obj = self.objects[self.object_names[0]]
+    #         obj.set_demo_states(demo_data)
+    #         obj.num_demo_frames = obj.demo_states.shape[0]
+    #         obj.init_pos = obj.demo_states[0, :3].clone()
+    #         obj.init_quat = obj.demo_states[0, 3:7].clone()
+    #         obj.init_qpos = obj.demo_states[0, 7:8].clone()
 
-            # Update demo DOF states if object is actuated
-            if obj.actuated and obj.post_built:
-                demo_dofs = []
-                for i in range(obj.demo_states.shape[0]):
-                    state = obj.demo_states[i]
-                    obj.set_object_state(
-                        root_pos=state[:3][None].repeat(obj.num_envs, 1),
-                        root_quat=state[3:7][None].repeat(obj.num_envs, 1),
-                        joint_qpos=state[7:8][None].repeat(obj.num_envs, 1),
-                    )
-                    dofs_pos = obj.entity.get_dofs_position()
-                    demo_dofs.append(dofs_pos[0])
-                obj.demo_dofs = torch.stack(demo_dofs, dim=0)
+    #         # Update demo DOF states if object is actuated
+    #         if obj.actuated and obj.post_built:
+    #             demo_dofs = []
+    #             for i in range(obj.demo_states.shape[0]):
+    #                 state = obj.demo_states[i]
+    #                 obj.set_object_state(
+    #                     root_pos=state[:3][None].repeat(obj.num_envs, 1),
+    #                     root_quat=state[3:7][None].repeat(obj.num_envs, 1),
+    #                     joint_qpos=state[7:8][None].repeat(obj.num_envs, 1),
+    #                 )
+    #                 dofs_pos = obj.entity.get_dofs_position()
+    #                 demo_dofs.append(dofs_pos[0])
+    #             obj.demo_dofs = torch.stack(demo_dofs, dim=0)
 
-        # Update hand tracking targets with new retargeting sequence
-        for side, robot in self.robots.items():
-            side_data = retarget_data.get(side, {})
+    #     # Update hand tracking targets with new retargeting sequence
+    #     for side, robot in self.robots.items():
+    #         side_data = retarget_data.get(side, {})
             
-            if 'init_qpos' in side_data:
-                robot.set_custom_init_qpos(side_data['init_qpos'])
+    #         if 'init_qpos' in side_data:
+    #             robot.set_custom_init_qpos(side_data['init_qpos'])
 
-            if 'residual_qpos' in side_data:
-                qpos_targets = None
-                if robot.cfg.get("use_saved_targets", False):
-                    qpos_targets = side_data.get('qpos_targets', None)
-                    assert qpos_targets is not None, "Need qpos_targets when use_saved_targets=True"
-                robot.set_residual_qpos(
-                    num_frames=side_data['num_frames'],
-                    residual_qpos_dict=side_data['residual_qpos'],
-                    qpos_targets_dict=qpos_targets,
-                )
-                if robot.action_mode == "relative":
-                    robot.set_relative_step_size(robot.residual_qpos)
+    #         if 'residual_qpos' in side_data:
+    #             qpos_targets = None
+    #             if robot.cfg.get("use_saved_targets", False):
+    #                 qpos_targets = side_data.get('qpos_targets', None)
+    #                 assert qpos_targets is not None, "Need qpos_targets when use_saved_targets=True"
+    #             robot.set_residual_qpos(
+    #                 num_frames=side_data['num_frames'],
+    #                 residual_qpos_dict=side_data['residual_qpos'],
+    #                 qpos_targets_dict=qpos_targets,
+    #             )
+    #             if robot.action_mode == "relative":
+    #                 robot.set_relative_step_size(robot.residual_qpos)
 
-            if 'limits' in side_data:
-                robot.set_custom_joint_limits(side_data['limits'])
+    #         if 'limits' in side_data:
+    #             robot.set_custom_joint_limits(side_data['limits'])
 
-        # Reset all environments if requested
-        if reset_envs:
-            env_ids = torch.arange(self.num_envs, dtype=torch.long, device=self.device)
-            self.reset_idx(env_ids)
+    #     # Reset all environments if requested
+    #     if reset_envs:
+    #         env_ids = torch.arange(self.num_envs, dtype=torch.long, device=self.device)
+    #         self.reset_idx(env_ids)
 
-        idx_str = f" index {demo_idx}" if demo_idx is not None else ""
-        demo_name = None
-        if demo_idx is not None and 0 <= demo_idx < len(self.all_demo_names):
-            demo_name = self.all_demo_names[demo_idx]
-            self.demo_switch_counts[demo_idx] += 1
-        name_str = f", name={demo_name}" if demo_name is not None else ""
-        print(f"[INFO] Changed demo{idx_str}{name_str} (length={self.demo_length})")
+    #     idx_str = f" index {demo_idx}" if demo_idx is not None else ""
+    #     demo_name = None
+    #     if demo_idx is not None and 0 <= demo_idx < len(self.all_demo_names):
+    #         demo_name = self.all_demo_names[demo_idx]
+    #         self.demo_switch_counts[demo_idx] += 1
+    #     name_str = f", name={demo_name}" if demo_name is not None else ""
+    #     print(f"[INFO] Changed demo{idx_str}{name_str} (length={self.demo_length})")
         
-        # Save trajectories to file for analysis
-        if demo_idx is not None:
-            self.save_demo_trajectories(demo_data, retarget_data, demo_idx)
+    #     # Save trajectories to file for analysis
+    #     if demo_idx is not None:
+    #         self.save_demo_trajectories(demo_data, retarget_data, demo_idx)
 
     def transform_vertice_frame(self, vertices, pose):
         """ transform the vertices to the object frame """

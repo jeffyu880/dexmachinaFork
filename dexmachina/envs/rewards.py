@@ -158,33 +158,30 @@ class RewardModule:
         print(len(self.all_demo_tensors['obj_pos']))
         print(self.all_demo_lengths)
 
-    def match_demo_state(self, demo_key, episode_length_buf, env_demo_idx=None):
-        '''
-            Returns demo data for each environment at its current timestep
-            demo_key: obj_pos, obj_quat, or obj_arti "string"
-            episode_length_buf: tensor tracking the current timestep for each envionrment in the parallel batch
-            env_demo_idx: the index for what demo to use (int)
-        '''
-        """ returns shape (num_envs, num_features) """
-        if env_demo_idx is not None and hasattr(self, 'all_demo_tensors'):
-            # print("In match_demo_state: Using multi demo")
+    def assign_env_demos_round_robin(self, num_envs, device):
+        """Assign each env a fixed demo index via round-robin: env i -> demo i % num_demos."""
+        num_demos = len(self.all_demo_lengths)
+        self.env_demo_idx = torch.arange(num_envs, device=device) % num_demos
+
+    def match_demo_state(self, demo_key, episode_length_buf):
+        """Returns demo data for each environment at its current timestep. shape: (num_envs, feat)"""
+        if hasattr(self, 'env_demo_idx') and hasattr(self, 'all_demo_tensors'):
             assert demo_key in self.all_demo_tensors, f"Key {demo_key} not in all_demo_tensors"
             demo_lengths = torch.tensor(self.all_demo_lengths, device=episode_length_buf.device, dtype=episode_length_buf.dtype)
-            per_env_len = demo_lengths[env_demo_idx]        # technically not needed since all demos have the same lengths
+            per_env_len = demo_lengths[self.env_demo_idx]
             demo_t = torch.minimum(episode_length_buf, per_env_len - 1)
-            return self.all_demo_tensors[demo_key][env_demo_idx, demo_t]
+            return self.all_demo_tensors[demo_key][self.env_demo_idx, demo_t]
         assert demo_key in self.demo_tensors, f"Key {demo_key} not found in demo_tensors"
         demo_t = torch.where(episode_length_buf >= self.demo_length, self.demo_length - 1, episode_length_buf)
         return self.demo_tensors[demo_key][demo_t]
     
-    def compute_task_reward(self, obj_pos, obj_quat, obj_arti, demo_pos, demo_quat, episode_length_buf, env_demo_idx=None):
+    def compute_task_reward(self, obj_pos, obj_quat, obj_arti, demo_pos, demo_quat, episode_length_buf):
         if obj_pos is None or obj_quat is None or obj_arti is None or self.task_rew_weight == 0.0:
             # dummy reward
             task_rew = torch.zeros(episode_length_buf.shape, device=episode_length_buf.device)
             return task_rew, dict(task_rew=task_rew)
-        
-        print("Computing task reward for demo: ", env_demo_idx)
-        demo_arti = self.match_demo_state("obj_arti", episode_length_buf, env_demo_idx)
+
+        demo_arti = self.match_demo_state("obj_arti", episode_length_buf)
         pos_dist = position_distance(obj_pos, demo_pos)
         rot_dist = rotation_distance(obj_quat, demo_quat)
         # arti_dist = torch.mean((obj_arti - demo_arti)**2, dim=-1)
@@ -236,13 +233,13 @@ class RewardModule:
             task_rew[tomask] = 0.0
         return task_rew, rew_dict
 
-    def compute_keypoint_dist(self, keypoint_pos, episode_length_buf, left_hand=True, env_demo_idx=None):
+    def compute_keypoint_dist(self, keypoint_pos, episode_length_buf, left_hand=True):
         demo_key = "kpts_left" if left_hand else "kpts_right"
-        demo_kpts = self.match_demo_state(demo_key, episode_length_buf, env_demo_idx)
+        demo_kpts = self.match_demo_state(demo_key, episode_length_buf)
         return position_distance(keypoint_pos, demo_kpts)
 
-    def compute_wrist_reward(self, wrist_pose, episode_length_buf, side='left', env_demo_idx=None):
-        demo_wrist = self.match_demo_state(f"wrist_pose_{side}", episode_length_buf, env_demo_idx)
+    def compute_wrist_reward(self, wrist_pose, episode_length_buf, side='left'):
+        demo_wrist = self.match_demo_state(f"wrist_pose_{side}", episode_length_buf)
         wrist_rot_dist = rotation_distance(wrist_pose[:, 3:], demo_wrist[:, 3:])
         wrist_pos_dist = position_distance(wrist_pose[:, :3], demo_wrist[:, :3])
         rot_beta = self.cfg["imi_wrist_rot_beta"]
@@ -257,23 +254,22 @@ class RewardModule:
         kpts_left: torch.Tensor,
         kpts_right: torch.Tensor,
         episode_length_buf: torch.Tensor,
-        env_demo_idx=None,
     ):
-        fingertip_dist_left = self.compute_keypoint_dist(kpts_left, episode_length_buf, left_hand=True, env_demo_idx=env_demo_idx)
-        fingertip_dist_right = self.compute_keypoint_dist(kpts_right, episode_length_buf, left_hand=False, env_demo_idx=env_demo_idx)
+        fingertip_dist_left = self.compute_keypoint_dist(kpts_left, episode_length_buf, left_hand=True)
+        fingertip_dist_right = self.compute_keypoint_dist(kpts_right, episode_length_buf, left_hand=False)
         fingertip_dist = torch.mean( (fingertip_dist_left + fingertip_dist_right) / 2.0 , dim=-1) # (B, num_links) -> (B,)
         beta = self.cfg["imi_fingertip_beta"]
         if self.exp_kpt_first:
             fingertip_rew_left = torch.exp(- beta * fingertip_dist_left)
             fingertip_rew_right = torch.exp(- beta * fingertip_dist_right)
-            fingertip_rew = torch.mean( (fingertip_rew_left + fingertip_rew_right) / 2.0 , dim=-1) # (B, num_links) -> (B,) 
-        else:  
-            fingertip_rew = torch.exp(-self.cfg["imi_fingertip_beta"] * fingertip_dist) 
-        # 
+            fingertip_rew = torch.mean( (fingertip_rew_left + fingertip_rew_right) / 2.0 , dim=-1) # (B, num_links) -> (B,)
+        else:
+            fingertip_rew = torch.exp(-self.cfg["imi_fingertip_beta"] * fingertip_dist)
+        #
         if self.imi_wrist_weight > 0.0:
             # do a rotation + position distance for wrist pose
-            wrist_rew_left, pos_dist_left, rot_dist_left = self.compute_wrist_reward(wrist_pose_left, episode_length_buf, side='left', env_demo_idx=env_demo_idx)
-            wrist_rew_right, pos_dist_right, rot_dist_right = self.compute_wrist_reward(wrist_pose_right, episode_length_buf, side='right', env_demo_idx=env_demo_idx)
+            wrist_rew_left, pos_dist_left, rot_dist_left = self.compute_wrist_reward(wrist_pose_left, episode_length_buf, side='left')
+            wrist_rew_right, pos_dist_right, rot_dist_right = self.compute_wrist_reward(wrist_pose_right, episode_length_buf, side='right')
             wrist_rew = (wrist_rew_left + wrist_rew_right) / 2.0
             imi_rew = self.imi_wrist_weight * wrist_rew + (1.0 - self.imi_wrist_weight) * fingertip_rew
 
@@ -331,10 +327,9 @@ class RewardModule:
         episode_length_buf,
         demo_obj_pose, # shape (N, 7)
         side='left',
-        env_demo_idx=None,
     ):
-        demo_wrist_pose = self.match_demo_state(f"wrist_pose_{side}", episode_length_buf, env_demo_idx)
-        demo_contacts = self.match_demo_state(f"contact_links_{side}", episode_length_buf, env_demo_idx) 
+        demo_wrist_pose = self.match_demo_state(f"wrist_pose_{side}", episode_length_buf)
+        demo_contacts = self.match_demo_state(f"contact_links_{side}", episode_length_buf)
         # N, num_links * 2, 4 (last dim is contact pair ID) -> NOTE in ARCTIC, part_id=2 is 'bottom' link, part_id=1 is 'top' 
         demo_positions = demo_contacts[:, :, :3]
         demo_valid_contact = demo_contacts[:, :, -1] > 0.0 # (part id is <= 0 if no contact)
@@ -415,13 +410,12 @@ class RewardModule:
         demo_obj_pose,
         side='left',
         max_distance=1.0,
-        env_demo_idx=None,
     ):
         """
         Instead of computing point cloud reward, here we assume demo contacts and policy contacts
         are from the same set of dex hand links and hence each contact point has a matched target position in the demo
-        """ 
-        demo_contacts = self.match_demo_state(f"contact_links_{side}", episode_length_buf, env_demo_idx)
+        """
+        demo_contacts = self.match_demo_state(f"contact_links_{side}", episode_length_buf)
         # NOTE the retargeted contacts are of shape (N, num_obj_parts=2, num_links, 4), first row is 'top' and second row is 'bottom'!
         # need to flip the order since policy contact has object link bottom first 
         demo_contacts = demo_contacts.clone()[:, [1, 0], :, :] # (N, num_obj_links, num_hand_links, 4)
@@ -478,7 +472,6 @@ class RewardModule:
         obj_pose,
         demo_obj_pose,
         episode_length_buf,
-        env_demo_idx=None,
     ):
         rews = dict()
         contact_rew = 0
@@ -489,7 +482,7 @@ class RewardModule:
         ):
             part_dist = self.compute_matched_contact_per_hand(
                 contacts, valids, episode_length_buf,
-                obj_pose, demo_obj_pose, side=side, env_demo_idx=env_demo_idx
+                obj_pose, demo_obj_pose, side=side
             )
             for i, part in enumerate(['bottom', 'top']): 
                 con_dist = part_dist[:, i]
@@ -516,18 +509,17 @@ class RewardModule:
         contacts_link_right,
         contacts_link_valid_right,
         episode_length_buf,
-        env_demo_idx=None,
     ):
-        demo_obj_pos = self.match_demo_state("obj_pos", episode_length_buf, env_demo_idx)
-        demo_obj_quat = self.match_demo_state("obj_quat", episode_length_buf, env_demo_idx)
+        demo_obj_pos = self.match_demo_state("obj_pos", episode_length_buf)
+        demo_obj_quat = self.match_demo_state("obj_quat", episode_length_buf)
         demo_obj_pose = torch.cat([demo_obj_pos, demo_obj_quat], dim=1)
         contact_rew_left, contact_dict_left = self.compute_hand_contact_reward(
             contacts_link_left, contacts_link_valid_left,
-            wrist_pose_left, obj_pose, episode_length_buf, demo_obj_pose, side='left', env_demo_idx=env_demo_idx
+            wrist_pose_left, obj_pose, episode_length_buf, demo_obj_pose, side='left'
         )
         contact_rew_right, contact_dict_right = self.compute_hand_contact_reward(
             contacts_link_right, contacts_link_valid_right,
-            wrist_pose_right, obj_pose, episode_length_buf, demo_obj_pose, side='right', env_demo_idx=env_demo_idx
+            wrist_pose_right, obj_pose, episode_length_buf, demo_obj_pose, side='right'
         )
         contact_rew = (contact_rew_left + contact_rew_right) / 2.0 
      
@@ -598,14 +590,13 @@ class RewardModule:
         wrist_pose_right,
         contact_forces, # shape (N, num_obj_links, num_hand_links, 3)
         episode_length_buf,
-        env_demo_idx=None,
     ):
-        demo_pos = self.match_demo_state("obj_pos", episode_length_buf, env_demo_idx)
-        demo_quat = self.match_demo_state("obj_quat", episode_length_buf, env_demo_idx)
+        demo_pos = self.match_demo_state("obj_pos", episode_length_buf)
+        demo_quat = self.match_demo_state("obj_quat", episode_length_buf)
         rew, rew_dict = self.compute_task_reward(
             obj_pos, obj_quat, obj_arti,
             demo_pos, demo_quat,
-            episode_length_buf, env_demo_idx
+            episode_length_buf
         )
         if self.bc_rew_weight > 0.0:
             bc_rew = self.bc_rew_weight * torch.exp(-self.cfg["bc_beta"] * bc_dist)
@@ -617,22 +608,22 @@ class RewardModule:
         if self.use_imi_rew:
             imi_rew, imi_rew_dict = self.compute_imitation_reward(
                 wrist_pose_left, wrist_pose_right,
-                kpts_left, kpts_right, episode_length_buf, env_demo_idx
+                kpts_left, kpts_right, episode_length_buf
             )
             if "well_track" in rew_dict and self.mask_well_track:
                 # use well_track to mask out the imitation reward
-                imi_rew = torch.where(rew_dict["well_track"], torch.zeros_like(imi_rew), imi_rew) 
+                imi_rew = torch.where(rew_dict["well_track"], torch.zeros_like(imi_rew), imi_rew)
             # rew += imi_rew
             rew_dict.update(imi_rew_dict)
- 
-        if self.contact_rew_weight > 0.0: 
+
+        if self.contact_rew_weight > 0.0:
             obj_pose = torch.cat([obj_pos, obj_quat], dim=1)
             demo_pose = torch.cat([demo_pos, demo_quat], dim=1)
             if self.use_retarget_contact:
                 contact_rew, contact_dict = self.compute_matched_contact_reward(
                     contact_link_pos_left, contact_link_valid_left,
                     contact_link_pos_right, contact_link_valid_right,
-                    obj_pose, demo_pose, episode_length_buf, env_demo_idx
+                    obj_pose, demo_pose, episode_length_buf
                 )
             else:
                 left_reshaped, left_valid = self.reshape_contact_with_label(
@@ -647,8 +638,8 @@ class RewardModule:
                     wrist_pose_right,
                     left_reshaped, left_valid,
                     right_reshaped, right_valid,
-                    episode_length_buf, env_demo_idx
-                ) 
+                    episode_length_buf
+                )
             if "well_track" in rew_dict and self.mask_well_track:
                 # use well_track to mask out the contact reward
                 contact_rew = torch.where(rew_dict["well_track"], torch.zeros_like(contact_rew), contact_rew)   
