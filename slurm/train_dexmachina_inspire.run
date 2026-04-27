@@ -1,0 +1,17 @@
+#!/bin/bash
+#SBATCH --chdir /home/jsyu/Genesis/dexmachinaFork
+#SBATCH --nodes 1
+#SBATCH --cpus-per-task 8
+#SBATCH --ntasks 1
+#SBATCH --mem 40G
+#SBATCH --gres=gpu:1
+#SBATCH --output=logs/inspire/slurm-%j.out
+#SBATCH --error=logs/inspire/slurm-%j.err
+#SBATCH --mail-user=jeffrey.yu@epfl.ch
+#SBATCH --mail-type=END,FAIL
+#SBATCH --time 48:00:00
+
+echo "Starting dexmachina inspire training on $HOSTNAME"
+source /home/jsyu/miniconda/etc/profile.d/conda.sh
+conda activate dexmachina-5
+bash examples/train_rl_inspire_ketchup.sh

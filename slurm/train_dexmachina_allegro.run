@@ -1,0 +1,19 @@
+#!/bin/bash
+# Submitted at: $(date +%Y-%m-%d\ %H:%M:%S)
+#SBATCH --chdir /home/jsyu/Genesis/dexmachinaFork
+#SBATCH --nodes 1
+#SBATCH --cpus-per-task 8
+#SBATCH --ntasks 1
+#SBATCH --mem 40G
+#SBATCH --gres=gpu:1
+#SBATCH --qos=normal
+#SBATCH --output=logs/allegro/new_obs/slurm_%j/slurm-%j.out
+#SBATCH --error=logs/allegro/new_obs/slurm_%j/slurm-%j.err
+#SBATCH --mail-user=jeffrey.yu@epfl.ch
+#SBATCH --mail-type=END,FAIL
+#SBATCH --time 48:00:00
+
+echo "Starting dexmachina allegro training on $HOSTNAME at $TIMESTAMP"
+source /home/jsyu/miniconda/etc/profile.d/conda.sh
+conda activate dexmachina-5
+bash examples/train_rl_allegro_ketchup.sh
