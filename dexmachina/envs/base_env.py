@@ -476,6 +476,11 @@ class BaseEnv:
             obj.set_all_demo_states(self.all_demo_data)  # calls assign_env_demos_round_robin internally
         self.env_demo_idx = self.reward_module.env_demo_idx
         print(f"[MULTI-DEMO] Pre-loaded {num_demos} demos, round-robin assignment: {self.env_demo_idx.tolist()}")
+        # per-demo cumulative reward accumulators (shape: num_demos)
+        self.per_demo_task_rew = torch.zeros(num_demos, device=self.device)
+        self.per_demo_con_rew = torch.zeros(num_demos, device=self.device)
+        self.per_demo_imi_rew = torch.zeros(num_demos, device=self.device)
+        self.per_demo_bc_rew = torch.zeros(num_demos, device=self.device)
 
     def setup_actions(self, robots: Dict[str, BaseRobot]):
         action_dim = 0 
@@ -666,11 +671,22 @@ class BaseEnv:
         # Reset only the envs that are done; other envs continue their rollout.
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
-            # only log cum. episode reward if that env_idx is DONE 
-            rew_dict['episode_rew'] = self.cumulative_task_rew[reset_env_ids] 
+            # only log cum. episode reward if that env_idx is DONE
+            rew_dict['episode_rew'] = self.cumulative_task_rew[reset_env_ids]
             self.steps_since_reset = 0
-            self.reset_idx(reset_env_ids)  # rew and obs will be resetted   
-        
+            self.reset_idx(reset_env_ids)  # rew and obs will be resetted
+
+        if self.env_demo_idx is not None and hasattr(self, 'per_demo_task_rew'):
+            for i, name in enumerate(self.demo_log_names):
+                self.extras["log"][f"demo_rew/task/{name}"] = self.per_demo_task_rew[i].item()
+                self.extras["log"][f"demo_rew/con/{name}"] = self.per_demo_con_rew[i].item()
+                self.extras["log"][f"demo_rew/imi/{name}"] = self.per_demo_imi_rew[i].item()
+                self.extras["log"][f"demo_rew/bc/{name}"] = self.per_demo_bc_rew[i].item()
+            self.per_demo_task_rew.zero_()
+            self.per_demo_con_rew.zero_()
+            self.per_demo_imi_rew.zero_()
+            self.per_demo_bc_rew.zero_()
+
         self.extras["log"].update(rew_dict) 
         if self.use_curriculum:
             rew_grads = self.curriculum.get_reward_grads()
@@ -771,7 +787,15 @@ class BaseEnv:
             bc_rew = rew_dict['bc_rew']
             bc_rew[self.nan_envs] = -1.0
             self.cumulative_bc_rew[:] += bc_rew
-        return rew_dict 
+        if self.env_demo_idx is not None and hasattr(self, 'per_demo_task_rew'):
+            self.per_demo_task_rew.scatter_add_(0, self.env_demo_idx, task_rewards if self.n_objects == 1 else rewards)
+            if 'con_rew' in rew_dict:
+                self.per_demo_con_rew.scatter_add_(0, self.env_demo_idx, con_rew)
+            if 'imi_rew' in rew_dict:
+                self.per_demo_imi_rew.scatter_add_(0, self.env_demo_idx, imi_rew)
+            if 'bc_rew' in rew_dict:
+                self.per_demo_bc_rew.scatter_add_(0, self.env_demo_idx, bc_rew)
+        return rew_dict
 
     def _get_dones(self):
         stepped_length = self.episode_length_buf - self.episode_start_buf

@@ -258,6 +258,9 @@ def gather_object_state_tensor(demo_data):
 
 def eval_one_episode(env, agent, obj_state_tensor, print_rew=False, record_video=False, show_reference=False):
     obs = env.reset() 
+    
+    # print("Obs: ", obs)
+    
     if isinstance(obs, dict):
         obs = obs["obs"]
     # required: enables the flag for batched observations
@@ -314,7 +317,6 @@ def eval_one_episode(env, agent, obj_state_tensor, print_rew=False, record_video
                         ) 
             obs, rew, dones, infos = env.step(actions) 
             obj_pos, obj_quat, obj_arti = obj.root_pos, obj.root_quat, obj.dof_pos
-            # print(f"Step {env_step}: Obj pos: {obj_pos.cpu().numpy()}")
             obj_state = torch.cat([obj_pos, obj_quat, obj_arti], dim=-1)
             eval_data["obj_state"].append(obj_state.cpu().numpy())
             eval_data["demo_state"].append(demo_state.cpu().numpy())
@@ -332,6 +334,9 @@ def eval_one_episode(env, agent, obj_state_tensor, print_rew=False, record_video
             for key, val in obj_obs.items():
                 eval_data[f"obj_{key}"].append(val.cpu().numpy() if hasattr(val, 'cpu') else val)
 
+            if env_step == 2:
+                print(f"Step {env_step}: Obj pos: {eval_data['obj_state']}")
+                print(f"robot pos", eval_data["right_hand_dof_target_pos"])
             # rew_dict = uenv.rew_dict
             # for key in ['pos_dist', 'rot_dist', 'arti_dist']:
             #     eval_data[key].append(rew_dict[key].cpu().numpy())
@@ -468,7 +473,8 @@ def main():
     parser.add_argument('--video_fname', '-of', type=str, default="-eval.mp4") # if not provided, save in the same folder as the checkpoint
     parser.add_argument('--camera_angle', '-cam', type=str, default='front', choices=['front', 'top', 'side', 'back', 'isometric'], help='Camera angle for video recording')
     parser.add_argument('--resolution', '-res', type=int, default=1024, help='Video resolution in pixels (512-4096, default 1024)')
-    
+    parser.add_argument('--demo_idx', '-di', type=int, default=None, help='Index of demo to use as reference (for multi-demo checkpoints). If not set, prompts interactively.')
+
     args = parser.parse_args()
 
     # Convert checkpoint path to absolute path if relative
@@ -499,7 +505,7 @@ def main():
     if args.output_render:
         render_dir = os.path.join(args.render_dir, run_name)
         print('Saving video to a different folder')
-        video_fname = os.path.join(render_dir, ckpt_name.split(".")[0] + args.camera_angle + args.video_fname)
+        video_fname = os.path.join(render_dir, ckpt_name)
         os.makedirs(render_dir, exist_ok=True)
 
     assert os.path.exists(saved_cfg_fname), f"File {saved_cfg_fname} does not exist"
@@ -512,7 +518,7 @@ def main():
     env_kwargs = remap_paths_in_config(env_kwargs, server_username='jsyu')
     
     assert env_kwargs['env_cfg']['use_rl_games'], "The saved environment is not from rl-games"
-    
+
     if args.raytrace and args.record_video:
         env_kwargs['env_cfg']['scene_kwargs']['raytrace'] = True
 
@@ -564,6 +570,28 @@ def main():
     # Load reference clip BEFORE creating environment so demo_data is correct from the start
     if args.reference_clip is not None:
         print(f"\n[INFO] Loading alternative reference clip: {args.reference_clip}")
+        
+        # Multi-demo: let user pick which demo to use as reference
+        all_demo_names = env_kwargs.get('all_demo_names', None)
+        if all_demo_names and len(all_demo_names) > 1:
+            print("\nMultiple demos found in checkpoint:")
+            for i, name in enumerate(all_demo_names):
+                print(f"  [{i}] {name}")
+            if args.demo_idx is not None:
+                chosen = args.demo_idx
+            else:
+                chosen = int(input(f"Select demo index [0-{len(all_demo_names)-1}]: "))
+            assert 0 <= chosen < len(all_demo_names), f"Invalid demo index {chosen}"
+            print(f"[INFO] Using demo [{chosen}]: {all_demo_names[chosen]}")
+            env_kwargs['demo_data'] = env_kwargs['all_demo_data'][chosen]
+            env_kwargs['retarget_data'] = env_kwargs['all_retarget_data'][chosen]
+            demo_tag = all_demo_names[chosen].replace("/", "_")
+            video_fname = join(ckpt_data_folder, f"video_{demo_tag}.mp4")
+            if args.output_render:
+                video_fname = os.path.join(render_dir, ckpt_name.split(".")[0] + f"_{demo_tag}" + args.video_fname)
+            # print("Using reference clip: ", env_kwargs['demo_data'])
+            # print(env_kwargs['retarget_data'])
+            
         from dexmachina.envs.demo_data import get_demo_data, load_genesis_retarget_data
         # Parse reference clip
         obj_name_ref, start, end, subject_name, use_clip = parse_clip_string(args.reference_clip)
