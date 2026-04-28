@@ -1,0 +1,17 @@
+#!/bin/bash
+#SBATCH --chdir /users/jsyu/Genesis/dexmachinaFork
+#SBATCH --nodes 1
+#SBATCH --cpus-per-task 8
+#SBATCH --ntasks 1
+#SBATCH --mem 40G
+#SBATCH --gres=gpu:1
+#SBATCH --output=logs/xhand/slurm-%j_1.out
+#SBATCH --error=logs/xhand/slurm-%j_1.err
+#SBATCH --mail-user=jeffrey.yu@epfl.ch
+#SBATCH --mail-type=END,FAIL
+#SBATCH --time 48:00:00
+
+echo "Starting dexmachina xhand training on $HOSTNAME"
+source /users/jsyu/miniconda/etc/profile.d/conda.sh
+conda activate dexmachina-5
+bash examples/train_rl_xhand_box.sh
