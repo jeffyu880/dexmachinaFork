@@ -256,7 +256,7 @@ def gather_object_state_tensor(demo_data):
     arr = np.concatenate([obj_pos, obj_quat, obj_arti], axis=1)
     return torch.tensor(arr).float()
 
-def eval_one_episode(env, agent, obj_state_tensor, print_rew=False, record_video=False, show_reference=False):
+def eval_one_episode(env, agent, obj_state_tensor, print_rew=False, record_video=False, show_reference=False, save_traj=False):
     obs = env.reset() 
     
     # print("Obs: ", obs)
@@ -491,7 +491,7 @@ def main():
     parser.add_argument('--camera_angle', '-cam', type=str, default='front', choices=['front', 'top', 'side', 'back', 'isometric'], help='Camera angle for video recording')
     parser.add_argument('--resolution', '-res', type=int, default=1024, help='Video resolution in pixels (512-4096, default 1024)')
     parser.add_argument('--demo_idx', '-di', type=int, default=None, help='Index of demo to use as reference (for multi-demo checkpoints). If not set, prompts interactively.')
-
+    parser.add_argument('--save_traj', action='store_true', help='Record object and hand policy trajectory and demo trajectory')
     args = parser.parse_args()
 
     # Convert checkpoint path to absolute path if relative
@@ -520,10 +520,11 @@ def main():
 
     video_fname = join(ckpt_data_folder, f"video.mp4")
     if args.output_render:
-        render_dir = os.path.join(args.render_dir, run_name)
-        print('Saving video to a different folder')
-        video_fname = os.path.join(render_dir, ckpt_name)
-        os.makedirs(render_dir, exist_ok=True)
+        render_dir = ckpt_data_folder
+        # render_dir = os.path.join(ckpt_data_folder, run_name)
+        # print('Saving video to a different folder')
+        video_fname = os.path.join(ckpt_data_folder, ckpt_name)
+        os.makedirs(ckpt_data_folder, exist_ok=True)
 
     assert os.path.exists(saved_cfg_fname), f"File {saved_cfg_fname} does not exist"
     # load to pkl
@@ -585,6 +586,7 @@ def main():
     env_kwargs.pop("curriculum_cfg")
     
     # Load reference clip BEFORE creating environment so demo_data is correct from the start
+    demo_tag = None   # set below for multi-demo checkpoints; used in output filenames
     all_demo_names = env_kwargs.get('all_demo_names', None)
     if all_demo_names and len(all_demo_names) > 1:
         if args.reference_clip is not None:
@@ -715,7 +717,12 @@ def main():
 
     for eps in range(args.eval_episodes):
         frames, eval_data = eval_one_episode(
-            env, agent, obj_state_tensor, args.print_rew, args.record_video, args.show_reference
+            env, agent, 
+            obj_state_tensor, 
+            args.print_rew, 
+            args.record_video, 
+            args.show_reference,
+            args.save_traj
             )
         
         # if object_models is not None:
@@ -765,13 +772,39 @@ def main():
         #     except Exception as e:
         #         print(f"✗ Error saving ADD metrics JSON: {e}")
         
-        npy_base = args.npy_name if args.npy_name is not None else "eval"
-        ckpt_eval_fname = os.path.join(ckpt_data_folder, f"{npy_base}_ep{eps}.npy")
-        np.save(ckpt_eval_fname, eval_data)
+        npy_base = args.npy_name if args.npy_name is not None else (demo_tag if demo_tag is not None else "eval")
+        ckpt_eval_fname = os.path.join(ckpt_data_folder, f"{npy_base}")
+        np.save(os.path.join(ckpt_eval_fname, ".npy"), eval_data)
         print(f"Saved eval data to {ckpt_eval_fname}")
         # try loading the data
-        # eval_data = np.load(ckpt_eval_fname, allow_pickle=True).item() 
-        if args.record_video: 
+        # eval_data = np.load(ckpt_eval_fname, allow_pickle=True).item()
+
+        if args.save_traj:
+            def to_cpu(obj):
+                if isinstance(obj, torch.Tensor):
+                    return obj.detach().cpu().numpy()
+                if isinstance(obj, dict):
+                    return {k: to_cpu(v) for k, v in obj.items()}
+                if isinstance(obj, (list, tuple)):
+                    return type(obj)(to_cpu(v) for v in obj)
+                return obj
+
+            pkl_data = to_cpu({
+                'policy_obj_state': eval_data['obj_state'],
+                'policy_left_hand': {k.removeprefix('left_hand_'): v
+                                      for k, v in eval_data.items() if k.startswith('left_hand_')},
+                'policy_right_hand': {k.removeprefix('right_hand_'): v
+                                       for k, v in eval_data.items() if k.startswith('right_hand_')},
+                'demo_obj': env_kwargs['demo_data'],
+                'demo_robot': env_kwargs.get('retarget_data', {}),
+                'demo_state': eval_data['demo_state'],
+            })
+            pkl_fname = os.path.join(ckpt_eval_fname, ".pkl")
+            with open(pkl_fname, 'wb') as f:
+                pickle.dump(pkl_data, f)
+            print(f"Saved pkl data to {pkl_fname}")
+
+        if args.record_video:
             # save video with opencv (cv2)
             import cv2
             fps = int(1/uenv.dt/2)
