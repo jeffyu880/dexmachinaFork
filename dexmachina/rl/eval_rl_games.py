@@ -334,9 +334,26 @@ def eval_one_episode(env, agent, obj_state_tensor, print_rew=False, record_video
             for key, val in obj_obs.items():
                 eval_data[f"obj_{key}"].append(val.cpu().numpy() if hasattr(val, 'cpu') else val)
 
-            if env_step == 2:
-                print(f"Step {env_step}: Obj pos: {eval_data['obj_state']}")
-                print(f"robot pos", eval_data["right_hand_dof_target_pos"])
+            if env_step == 0:
+                print(f"\n========== EVAL DEBUG STEP 0 ==========")
+                print(f"obs shape: {obs.shape}, min: {obs.min():.3f}, max: {obs.max():.3f}")
+                print(f"actions shape: {actions.shape}, min: {actions.min():.3f}, max: {actions.max():.3f}")
+                print(f"obj_pos (sim):  {obj_pos[0].cpu().numpy().round(3)}")
+                print(f"obj_pos (demo): {demo_state[:3].cpu().numpy().round(3)}")
+                print(f"obj_quat (sim):  {obj_quat[0].cpu().numpy().round(3)}")
+                print(f"obj_quat (demo): {demo_state[3:7].cpu().numpy().round(3)}")
+                print(f"left  residual_qpos shape: {joint_target_left.shape}, step0: {joint_target_left[0].cpu().numpy().round(3)}")
+                print(f"right residual_qpos shape: {joint_target_right.shape}, step0: {joint_target_right[0].cpu().numpy().round(3)}")
+                print(f"left  curr_targets[0]: {left_hand.curr_targets[0].cpu().numpy().round(3)}")
+                print(f"right curr_targets[0]: {right_hand.curr_targets[0].cpu().numpy().round(3)}")
+                print(f"left  wrist_pose[0]: {left_hand.wrist_pose[0].cpu().numpy().round(3)}")
+                print(f"right wrist_pose[0]: {right_hand.wrist_pose[0].cpu().numpy().round(3)}")
+                ep_buf = uenv.episode_length_buf
+                demo_wrist_left  = uenv.reward_module.match_demo_state("wrist_pose_left",  ep_buf)
+                demo_wrist_right = uenv.reward_module.match_demo_state("wrist_pose_right", ep_buf)
+                print(f"left  wrist_pose target[0]: {demo_wrist_left[0].cpu().numpy().round(3)}")
+                print(f"right wrist_pose target[0]: {demo_wrist_right[0].cpu().numpy().round(3)}")
+                print(f"========================================\n")
             # rew_dict = uenv.rew_dict
             # for key in ['pos_dist', 'rot_dist', 'arti_dist']:
             #     eval_data[key].append(rew_dict[key].cpu().numpy())
@@ -568,31 +585,31 @@ def main():
     env_kwargs.pop("curriculum_cfg")
     
     # Load reference clip BEFORE creating environment so demo_data is correct from the start
-    if args.reference_clip is not None:
-        print(f"\n[INFO] Loading alternative reference clip: {args.reference_clip}")
-        
-        # Multi-demo: let user pick which demo to use as reference
-        all_demo_names = env_kwargs.get('all_demo_names', None)
-        if all_demo_names and len(all_demo_names) > 1:
-            print("\nMultiple demos found in checkpoint:")
-            for i, name in enumerate(all_demo_names):
-                print(f"  [{i}] {name}")
-            if args.demo_idx is not None:
-                chosen = args.demo_idx
-            else:
-                chosen = int(input(f"Select demo index [0-{len(all_demo_names)-1}]: "))
-            assert 0 <= chosen < len(all_demo_names), f"Invalid demo index {chosen}"
-            print(f"[INFO] Using demo [{chosen}]: {all_demo_names[chosen]}")
-            env_kwargs['demo_data'] = env_kwargs['all_demo_data'][chosen]
-            env_kwargs['retarget_data'] = env_kwargs['all_retarget_data'][chosen]
-            demo_tag = all_demo_names[chosen].replace("/", "_")
-            video_fname = join(ckpt_data_folder, f"video_{demo_tag}.mp4")
-            if args.output_render:
-                video_fname = os.path.join(render_dir, ckpt_name.split(".")[0] + f"_{demo_tag}" + args.video_fname)
-            # print("Using reference clip: ", env_kwargs['demo_data'])
-            # print(env_kwargs['retarget_data'])
-            
+    all_demo_names = env_kwargs.get('all_demo_names', None)
+    if all_demo_names and len(all_demo_names) > 1:
+        if args.reference_clip is not None:
+            print("Warning, using multi-demo loading, so ignoring the argument reference_clip")
+        # Multi-demo checkpoint: prompt user or use --demo_idx
+        print("\nMultiple demos found in checkpoint:")
+        for i, name in enumerate(all_demo_names):
+            print(f"  [{i}] {name}")
+        chosen = args.demo_idx if args.demo_idx is not None else int(input(f"Select demo index [0-{len(all_demo_names)-1}]: "))
+        assert 0 <= chosen < len(all_demo_names), f"Invalid demo index {chosen}"
+        print(f"[INFO] Using demo [{chosen}]: {all_demo_names[chosen]}")
+        # collapse to single demo so _setup_multi_demo doesn't round-robin across all demos
+        env_kwargs['demo_data'] = env_kwargs['all_demo_data'][chosen]
+        env_kwargs['retarget_data'] = env_kwargs['all_retarget_data'][chosen]
+        # env_kwargs['all_demo_data'] = [env_kwargs['all_demo_data'][chosen]]
+        # env_kwargs['all_retarget_data'] = [env_kwargs['all_retarget_data'][chosen]]
+        # env_kwargs['all_demo_names'] = [all_demo_names[chosen]]
+        demo_tag = all_demo_names[chosen].replace("/", "_")
+        video_fname = join(ckpt_data_folder, f"video_{demo_tag}.mp4")
+        if args.output_render:
+            video_fname = os.path.join(render_dir, ckpt_name.split(".")[0] + f"_{demo_tag}" + args.video_fname)
+
+    elif args.reference_clip is not None: # using a single but alternative demo than the one stored in the env.pkl
         from dexmachina.envs.demo_data import get_demo_data, load_genesis_retarget_data
+        print(f"\n[INFO] Loading alternative reference clip: {args.reference_clip}")
         # Parse reference clip
         obj_name_ref, start, end, subject_name, use_clip = parse_clip_string(args.reference_clip)
         # Use the hand type from the training checkpoint, not command-line default
@@ -627,9 +644,7 @@ def main():
         env_kwargs['retarget_data'] = ref_retarget_data
     else:
         print(f"[INFO] Using training clip reference trajectory")
-        demo_data = env_kwargs['demo_data']
-
-      
+            
     device = torch.device('cuda:0')
     import genesis as gs
     gs.init(backend=gs.gpu, logging_level='warning')
@@ -669,7 +684,7 @@ def main():
     print(f"[INFO] Saved ketchup init quaternion: {obj_init_quat}")
     # Load object mesh for ADD metric
     object_models = load_object_model_for_evaluation(obj_name)
-    obj_state_tensor = gather_object_state_tensor(demo_data)
+    obj_state_tensor = gather_object_state_tensor(env_kwargs['demo_data'])
 
     agent_cfg_fname = get_rl_config_path("rl_games_ppo_cfg")
     

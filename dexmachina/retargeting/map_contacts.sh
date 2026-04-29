@@ -20,7 +20,7 @@ echo "Using hand: $HAND"
 # Array of demonstrations with their sequences and user numbers
 demonstrations=(
     # "s01:1"
-    "s02:1,3,4"
+    "s02:1"
     # "s04:2"
     # "s05:1"
     # "s06:1,2"

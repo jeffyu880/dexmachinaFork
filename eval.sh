@@ -3,7 +3,7 @@
 MAX_ATTEMPTS=20
 RETRY_DELAY=15
 
-CK=/home/jeffrey/Documents/Manipulation/Genesis/dexmachina/izar_logs/rl_games/allegro_hand/allegro-demo_2_0416_175716_ketchup40-140-s02-u01_B10000_hybrid_thres0.5_ho32_imi0.2_con2.0_bc0.2/nn/last_allegro_hand_ep_7500_rew_61.983406.pth
+CK=/home/jeffrey/Documents/Manipulation/Genesis/dexmachina/izar_logs/rl_games/allegro_hand/ketchup_combined_0426_220343/nn/last_allegro_hand_ep_4500_rew_85.383766.pth
 
 for attempt in $(seq 1 $MAX_ATTEMPTS); do
     echo "[Attempt $attempt/$MAX_ATTEMPTS] Running eval script..."
@@ -17,6 +17,7 @@ for attempt in $(seq 1 $MAX_ATTEMPTS); do
         --show_reference \
         --camera_angle isometric \
         --record_video \
+        -di 1
         # --reference_clip ketchup-30-130-s01-u01 \
         # --hand allegro_hand
     

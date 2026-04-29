@@ -2,7 +2,7 @@
 set -o pipefail
 
 # Retry configuration
-MAX_RETRIES=20
+MAX_RETRIES=5
 RETRY_COUNT=0
 SUCCESS=false
 
@@ -26,33 +26,41 @@ PARAM_FILE="training_params_multi_demo_$(date +%Y%m%d_%H%M%S).txt"
 
 # Define parameters once as associative arrays
 declare -A PARAMS=(
-    [batch_size]="-B 3"      # should be the num_envs
-    [epochs]="-obf -obt --max_epochs 30"
+    [batch_size]="-B 11000"      # should be the num_envs
+    [epochs]="-obf -obt --max_epochs 10000"
     [object]="--actuate_object --retarget_name para --horizon 32"
-    [learning]="-imw 0.5 --learning_rate 0.0003"
+    [learning]="-imw 0.5 --learning_rate 0.0001"
     [curriculum]="--gain_mode all --curr_schedule uniform --wait_epochs 200 --num_zero_epoch 500"
     [gains]="--fixed_mode uniform --uniform_mode slow --group_collisions"
     [rewards]="--contact_beta 10 --upper_ratios 0.9 0.9 1 --lower_ratios 0.6 0.6 1"
     [task_rewards]="--task_rew_betas 10 1 5 --action_penalty 0.01 --dialback_ep_len 30"
     [thresholds]="--aux_reset_thres 0 0 0 --curr_rew_thres 0.6 0 0 0"
     [training]="--skip_grad --deque_len 20 --save_freq 500 --use_retarget_contact"
-    [arm_model]="-am residual --hybrid_scales 0.1 1.0 --kp_init 100 --kv_init 5"
+    [arm_model]="-am hybrid --hybrid_scales 0.1 1.0 --kp_init 80 --kv_init 5"
     [weights]="-imi 0.2 -bc 0.2 -con 2.0 -ert 0.3"
-    [experiment]="-exp allegro-multi-demo"
+    [experiment]="-exp multi-demo-3-lr-0.0001"
     [hand]="--hand allegro_hand"
     [seed]="--seed 24"
-    [sampling]="--demo_sampling deterministic"
-    # [randomization]="--use_rand --rand_friction --rand_com --rand_mass"
+    # [sampling]="--demo_sampling deterministic"
+    # [randomization]="-rand_obs"         # rand_obs is randomizing observations into the robot and object policy
     # [checkpoint]="--checkpoint /path/to/your/checkpoint.pth"
 )
 
 # Multiple demo clips for training.
 # Format: object-start-end[-subject][-use_clip]
 DEMOS=(
-    "ketchup-25-125-s05-u01"
-    "ketchup-300-400-s02-u01"
-    # "ketchup-30-50-s02-u03"
-    # "ketchup-35-55-s02-u04"
+    # "ketchup-30-130-s01-u01"
+    "ketchup-40-140-s02-u01"
+    "ketchup-27-127-s02-u03"
+    "ketchup-27-127-s02-u04"
+    # "ketchup-25-125-s05-u01"
+    # "ketchup-36-136-s06-u02"
+    # "ketchup-19-119-s07-u02"
+    # "ketchup-31-131-s09-u01"
+    # "ketchup-31-131-s09-u03"
+    # "ketchup-25-125-s09-u04"
+    # "ketchup-34-134-s10-u01"
+    # "ketchup-35-135-s10-u02"
 )
 
 # Build the training command once so we can log and execute the exact same args.
@@ -75,8 +83,8 @@ CMD=(
     ${PARAMS[seed]}
     ${PARAMS[sampling]}
     ${PARAMS[randomization]}
-    # ${PARAMS[checkpoint]}
     --clips "${DEMOS[@]}"
+    # ${PARAMS[checkpoint]}
 )
 
 # Generate PRETTY_CMD for easy logging/copy-paste.

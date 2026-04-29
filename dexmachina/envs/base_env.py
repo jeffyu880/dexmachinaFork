@@ -181,10 +181,10 @@ class BaseEnv:
         self.group_collisions = group_collisions
         
         # Multi-demo support: store all demos for reset-time sampling
-        self.all_demo_data = all_demo_data if all_demo_data is not None else [demo_data]
-        self.all_retarget_data = all_retarget_data if all_retarget_data is not None else [retarget_data]
-        print("All demo data")
-        print("All retarget data")
+        if not env_cfg['is_eval']:
+            self.all_demo_data = all_demo_data if all_demo_data is not None else [demo_data]
+            self.all_retarget_data = all_retarget_data if all_retarget_data is not None else [retarget_data]
+
         if all_demo_names is None:
             self.all_demo_names = [f"demo_{i}" for i in range(len(self.all_demo_data))]
         else:
@@ -460,7 +460,7 @@ class BaseEnv:
             cam_pos = lookat_pos + np.array([0.0, -1.5, 1.2])
             self._set_camera(pos=cam_pos, lookat=lookat_pos, fov=30, name='front')
 
-        if len(self.all_demo_data) > 1:
+        if len(self.all_demo_data) > 1 and not self.is_eval:
             print("Using Multiple demo")
             self._setup_multi_demo()
 
