@@ -181,9 +181,8 @@ class BaseEnv:
         self.group_collisions = group_collisions
         
         # Multi-demo support: store all demos for reset-time sampling
-        if not env_cfg['is_eval']:
-            self.all_demo_data = all_demo_data if all_demo_data is not None else [demo_data]
-            self.all_retarget_data = all_retarget_data if all_retarget_data is not None else [retarget_data]
+        self.all_demo_data = all_demo_data if all_demo_data is not None else [demo_data]
+        self.all_retarget_data = all_retarget_data if all_retarget_data is not None else [retarget_data]
 
         if all_demo_names is None:
             self.all_demo_names = [f"demo_{i}" for i in range(len(self.all_demo_data))]
