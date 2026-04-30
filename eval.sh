@@ -17,7 +17,8 @@ for attempt in $(seq 1 $MAX_ATTEMPTS); do
         --show_reference \
         --camera_angle isometric \
         --record_video \
-        -di 1
+        -di 1 \
+        --save_traj \
         # --reference_clip ketchup-30-130-s01-u01 \
         # --hand allegro_hand
     
