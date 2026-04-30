@@ -523,7 +523,7 @@ def main():
         render_dir = ckpt_data_folder
         # render_dir = os.path.join(ckpt_data_folder, run_name)
         # print('Saving video to a different folder')
-        video_fname = os.path.join(ckpt_data_folder, ckpt_name)
+        video_fname = os.path.join(ckpt_data_folder, ckpt_name.replace(".pth", ".mp4"))
         os.makedirs(ckpt_data_folder, exist_ok=True)
 
     assert os.path.exists(saved_cfg_fname), f"File {saved_cfg_fname} does not exist"
@@ -774,7 +774,7 @@ def main():
         
         npy_base = args.npy_name if args.npy_name is not None else (demo_tag if demo_tag is not None else "eval")
         ckpt_eval_fname = os.path.join(ckpt_data_folder, f"{npy_base}")
-        np.save(os.path.join(ckpt_eval_fname, ".npy"), eval_data)
+        np.save(f"{ckpt_eval_fname}.npy", eval_data)
         print(f"Saved eval data to {ckpt_eval_fname}")
         # try loading the data
         # eval_data = np.load(ckpt_eval_fname, allow_pickle=True).item()
@@ -799,7 +799,8 @@ def main():
                 'demo_robot': env_kwargs.get('retarget_data', {}),
                 'demo_state': eval_data['demo_state'],
             })
-            pkl_fname = os.path.join(ckpt_eval_fname, ".pkl")
+            
+            pkl_fname = f"{ckpt_eval_fname}.pkl"
             with open(pkl_fname, 'wb') as f:
                 pickle.dump(pkl_data, f)
             print(f"Saved pkl data to {pkl_fname}")
