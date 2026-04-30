@@ -105,6 +105,7 @@ def load_multi_demo_data_separate(clip_list, args, device, exp_name, timestamp):
                 use_clip=use_clip,
                 subject_name=subject_name,
             )
+            
             demo_data = get_demo_data(
                 obj_name=obj_name,
                 hand_name=args.hand,

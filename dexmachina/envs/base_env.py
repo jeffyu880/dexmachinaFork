@@ -173,6 +173,7 @@ class BaseEnv:
         all_retarget_data=None,  # List of all retarget data
         all_demo_names=None,  # List of human-readable demo names for logging
     ):
+        self.no_object = env_cfg["no_object"]
         self.env_cfg = env_cfg
         self.reward_cfg = reward_cfg
         self.demo_data = demo_data
@@ -183,7 +184,7 @@ class BaseEnv:
         # Multi-demo support: store all demos for reset-time sampling
         self.all_demo_data = all_demo_data if all_demo_data is not None else [demo_data]
         self.all_retarget_data = all_retarget_data if all_retarget_data is not None else [retarget_data]
-
+        
         if all_demo_names is None:
             self.all_demo_names = [f"demo_{i}" for i in range(len(self.all_demo_data))]
         else:
@@ -297,6 +298,8 @@ class BaseEnv:
         if len(self.object_names) > 0: 
             self.object = self.objects[self.object_names[0]] # only support one object for now
         self.n_objects = len(self.object_names) # might be 0!!
+        
+        print("number of objects: ", self.n_objects)
        
         self.use_curriculum = False 
         self.curriculum = None
@@ -406,11 +409,12 @@ class BaseEnv:
             self.obj_verts = {part: obj.sample_mesh_vertices(300, part) for part in ['top', 'bottom']}
         
         self.observe_contact_force = env_cfg.get('observe_contact_force', False)
+        self.use_contact_reward = env_cfg.get('use_contact_reward', False) 
         print("Observe contact force", self.observe_contact_force)
         if self.n_objects == 0:
             self.observe_contact_force = False
-            print("Disabling contact force observation because no object")
-        self.use_contact_reward = env_cfg.get('use_contact_reward', False) 
+            self.use_contact_reward = False
+            print("Disabling contact force observation and contact reward because no object")
         if self.observe_contact_force or self.use_contact_reward:
             self.num_obj_links = len(self.object.coll_idxs_global)
             self.num_robot_links = sum([len(robot.coll_idxs_global) for robot in self.robots.values()])

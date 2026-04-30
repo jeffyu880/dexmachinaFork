@@ -2,7 +2,7 @@
 set -o pipefail
 
 # Retry configuration
-MAX_RETRIES=5
+MAX_RETRIES=20
 RETRY_COUNT=0
 SUCCESS=false
 
@@ -26,8 +26,8 @@ PARAM_FILE="training_params_multi_demo_$(date +%Y%m%d_%H%M%S).txt"
 
 # Define parameters once as associative arrays
 declare -A PARAMS=(
-    [batch_size]="-B 11000"      # should be the num_envs
-    [epochs]="-obf -obt --max_epochs 10000"
+    [batch_size]="-B 4"      #  the # num_envs
+    [epochs]="-obf -obt --max_epochs 5"
     [object]="--actuate_object --retarget_name para --horizon 32"
     [learning]="-imw 0.5 --learning_rate 0.0001"
     [curriculum]="--gain_mode all --curr_schedule uniform --wait_epochs 200 --num_zero_epoch 500"
@@ -41,6 +41,7 @@ declare -A PARAMS=(
     [experiment]="-exp multi-demo-3-lr-0.0001"
     [hand]="--hand allegro_hand"
     [seed]="--seed 24"
+    [no_object]="-no_obj"
     # [sampling]="--demo_sampling deterministic"
     # [randomization]="-rand_obs"         # rand_obs is randomizing observations into the robot and object policy
     # [checkpoint]="--checkpoint /path/to/your/checkpoint.pth"
@@ -66,7 +67,7 @@ DEMOS=(
 # Build the training command once so we can log and execute the exact same args.
 CMD=(
     python dexmachina/rl/train_rl_multi_demo.py
-    # --vis
+    --vis
     ${PARAMS[batch_size]} ${PARAMS[epochs]}
     ${PARAMS[object]}
     ${PARAMS[learning]}
@@ -83,6 +84,7 @@ CMD=(
     ${PARAMS[seed]}
     ${PARAMS[sampling]}
     ${PARAMS[randomization]}
+    ${PARAMS[no_object]}
     --clips "${DEMOS[@]}"
     # ${PARAMS[checkpoint]}
 )

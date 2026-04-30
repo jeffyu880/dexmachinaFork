@@ -106,12 +106,13 @@ def get_all_env_cfg(args, device, load_retarget_data=True):
     env_cfg['observe_tip_dist'] = args.observe_tip_dist
     env_cfg['observe_contact_force'] = True #ve_contact_force
     print(f"Setting observe_contact_force to True")
-    env_cfg['use_contact_reward'] = args.contact_rew_weight > 0
+    env_cfg['use_contact_reward'] = (args.contact_rew_weight > 0) and (not args.no_object)
     env_cfg['use_rl_games'] = args.use_rl_games
     env_cfg['rand_init_ratio'] = args.rand_init_ratio  
     env_cfg['chunk_ep_length'] = args.chunk_ep_length
     env_cfg['demo_sampling'] = args.demo_sampling
     env_cfg['multi_demo'] = args.multi_demo
+    env_cfg['no_object'] = args.no_object
 
     if args.record_interval > 0 or args.record_video:
         env_cfg["record_video"] = True
@@ -158,9 +159,17 @@ def get_all_env_cfg(args, device, load_retarget_data=True):
         if args.color_object == 'gray':
             object_cfgs[obj_name]['color'] = (0.5, 0.5, 0.5, 1)
     if args.no_object:
-        # print('WARNING: No object in the environment. ONLY using imitation reward.')
-        reward_cfg['task_rew_weight'] = 0.0 
+        reward_cfg['task_rew_weight'] = 0.0
+        reward_cfg['contact_rew_weight'] = 0.0
+        reward_cfg['use_retarget_contact'] = False
+        env_cfg['observe_tip_dist'] = False
+        env_cfg['observe_contact_force'] = False
+        env_cfg['use_contact_reward'] = False
         object_cfgs = dict()
+        # zero out task/contact curriculum thresholds so they don't block advancement
+        args.curr_rew_thres[0] = 0.0  # task threshold
+        args.curr_rew_thres[1] = 0.0  # contact threshold
+        env_cfg['early_reset_threshold'] = 0.0
 
     assert len(args.upper_ratios) == len(args.lower_ratios) == 3, "Upper and lower ratios should have length 3"
     ups = list(args.upper_ratios)

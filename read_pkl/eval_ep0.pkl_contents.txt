@@ -1,0 +1,680 @@
+File: eval_ep0.pkl
+================================================================================
+
+dict(6 keys)
+  ['policy_obj_state']:
+    ndarray shape=(100, 2, 8) dtype=float32 min=-0.684 max=2.655
+  ['policy_left_hand']:
+    dict(7 keys)
+      ['dof_target_pos']:
+        ndarray shape=(100, 2, 22) dtype=float32 min=-2.044 max=1.717
+      ['dof_pos']:
+        ndarray shape=(100, 2, 22) dtype=float32 min=-1.464 max=1.001
+      ['dof_vel']:
+        ndarray shape=(100, 2, 22) dtype=float32 min=-0.1023 max=0.1171
+      ['kpt_pos']:
+        ndarray shape=(100, 2, 75) dtype=float32 min=-0.2703 max=1.353
+      ['wrist_pose']:
+        ndarray shape=(100, 2, 7) dtype=float32 min=-0.8901 max=1.196
+      ['goal_pos']:
+        ndarray shape=(100, 2, 22) dtype=float32 min=-4.665 max=1.709
+      ['previous_pos']:
+        ndarray shape=(100, 2, 22) dtype=float32 min=-4.401 max=1.71
+  ['policy_right_hand']:
+    dict(7 keys)
+      ['dof_target_pos']:
+        ndarray shape=(100, 2, 22) dtype=float32 min=-3.811 max=1.876
+      ['dof_pos']:
+        ndarray shape=(100, 2, 22) dtype=float32 min=-1.464 max=1.004
+      ['dof_vel']:
+        ndarray shape=(100, 2, 22) dtype=float32 min=-0.08174 max=0.07045
+      ['kpt_pos']:
+        ndarray shape=(100, 2, 75) dtype=float32 min=-0.2954 max=1.188
+      ['wrist_pose']:
+        ndarray shape=(100, 2, 7) dtype=float32 min=-0.7841 max=1.195
+      ['goal_pos']:
+        ndarray shape=(100, 2, 22) dtype=float32 min=-5.689 max=1.968
+      ['previous_pos']:
+        ndarray shape=(100, 2, 22) dtype=float32 min=-4.689 max=2.744
+  ['demo_obj']:
+    dict(9 keys)
+      ['obj_pos']:
+        ndarray shape=(100, 3) dtype=float32 min=-0.1572 max=1.245
+      ['obj_quat']:
+        ndarray shape=(100, 4) dtype=float32 min=-0.6705 max=0.8084
+      ['obj_arti']:
+        ndarray shape=(100,) dtype=float32 min=0 max=2.655
+      ['contact_links_left']:
+        ndarray shape=(100, 2, 21, 4) dtype=float64 min=-0.1085 max=2
+      ['contact_links_right']:
+        ndarray shape=(100, 2, 21, 4) dtype=float64 min=-0.1585 max=2
+      ['contact_links_valid_left']:
+        ndarray shape=(100, 2, 21) dtype=float64 min=0 max=1
+      ['left']:
+        dict(2 keys)
+          ['collision_link_names']:
+            list(len=21)
+              [0]:
+                str: 'base_link'
+              [1]:
+                str: 'link_0.0'
+              [2]:
+                str: 'link_4.0'
+              ... (18 more)
+          ['collision_link_local_idxs']:
+            list(len=21)
+              [0]:
+                int: 8
+              [1]:
+                int: 9
+              [2]:
+                int: 10
+              ... (18 more)
+      ['contact_links_valid_right']:
+        ndarray shape=(100, 2, 21) dtype=float64 min=0 max=1
+      ['right']:
+        dict(2 keys)
+          ['collision_link_names']:
+            list(len=21)
+              [0]:
+                str: 'base_link'
+              [1]:
+                str: 'link_0.0'
+              [2]:
+                str: 'link_4.0'
+              ... (18 more)
+          ['collision_link_local_idxs']:
+            list(len=21)
+              [0]:
+                int: 8
+              [1]:
+                int: 9
+              [2]:
+                int: 10
+              ... (18 more)
+  ['demo_robot']:
+    dict(2 keys)
+      ['left']:
+        dict(7 keys)
+          ['init_qpos']:
+            dict(22 keys)
+              ['L_forearm_tx_link_joint']:
+                ndarray shape=() dtype=float32 min=0.3254 max=0.3254
+              ['L_forearm_ty_link_joint']:
+                ndarray shape=() dtype=float32 min=0.05367 max=0.05367
+              ['L_forearm_tz_link_joint']:
+                ndarray shape=() dtype=float32 min=1.132 max=1.132
+              ['L_forearm_roll_link_joint']:
+                ndarray shape=() dtype=float32 min=-2.044 max=-2.044
+              ['L_forearm_pitch_link_joint']:
+                ndarray shape=() dtype=float32 min=-1.229 max=-1.229
+              ['L_forearm_yaw_link_joint']:
+                ndarray shape=() dtype=float32 min=-0.7739 max=-0.7739
+              ['joint_0.0']:
+                ndarray shape=() dtype=float32 min=-0.47 max=-0.47
+              ['joint_4.0']:
+                ndarray shape=() dtype=float32 min=-0.3044 max=-0.3044
+              ['joint_8.0']:
+                ndarray shape=() dtype=float32 min=0.47 max=0.47
+              ['joint_12.0']:
+                ndarray shape=() dtype=float32 min=0.7362 max=0.7362
+              ['joint_1.0']:
+                ndarray shape=() dtype=float32 min=0.3853 max=0.3853
+              ['joint_5.0']:
+                ndarray shape=() dtype=float32 min=0.2286 max=0.2286
+              ['joint_9.0']:
+                ndarray shape=() dtype=float32 min=0.145 max=0.145
+              ['joint_13.0']:
+                ndarray shape=() dtype=float32 min=-0.006323 max=-0.006323
+              ['joint_2.0']:
+                ndarray shape=() dtype=float32 min=0.002958 max=0.002958
+              ['joint_6.0']:
+                ndarray shape=() dtype=float32 min=0.005367 max=0.005367
+              ['joint_10.0']:
+                ndarray shape=() dtype=float32 min=0.009985 max=0.009985
+              ['joint_14.0']:
+                ndarray shape=() dtype=float32 min=1.189 max=1.189
+              ['joint_3.0']:
+                ndarray shape=() dtype=float32 min=-0.001364 max=-0.001364
+              ['joint_7.0']:
+                ndarray shape=() dtype=float32 min=-0.001877 max=-0.001877
+              ['joint_11.0']:
+                ndarray shape=() dtype=float32 min=-0.002142 max=-0.002142
+              ['joint_15.0']:
+                ndarray shape=() dtype=float32 min=-0.002484 max=-0.002484
+          ['limits']:
+            dict(22 keys)
+              ['L_forearm_tx_link_joint']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.02427 max=-0.02427
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.5254 max=0.5254
+              ['L_forearm_ty_link_joint']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.1918 max=-0.1918
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.2872 max=0.2872
+              ['L_forearm_tz_link_joint']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=0.8176 max=0.8176
+                  [1]:
+                    ndarray shape=() dtype=float32 min=1.391 max=1.391
+              ['L_forearm_roll_link_joint']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-4.218 max=-4.218
+                  [1]:
+                    ndarray shape=() dtype=float32 min=-1.544 max=-1.544
+              ['L_forearm_pitch_link_joint']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-2.16 max=-2.16
+                  [1]:
+                    ndarray shape=() dtype=float32 min=-0.007701 max=-0.007701
+              ['L_forearm_yaw_link_joint']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-1.377 max=-1.377
+                  [1]:
+                    ndarray shape=() dtype=float32 min=1.076 max=1.076
+              ['joint_0.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.62 max=-0.62
+                  [1]:
+                    ndarray shape=() dtype=float32 min=-0.1312 max=-0.1312
+              ['joint_4.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.4972 max=-0.4972
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.528 max=0.528
+              ['joint_8.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.62 max=-0.62
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.62 max=0.62
+              ['joint_12.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=0.113 max=0.113
+                  [1]:
+                    ndarray shape=() dtype=float32 min=1.294 max=1.294
+              ['joint_1.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=0.06484 max=0.06484
+                  [1]:
+                    ndarray shape=() dtype=float32 min=1.358 max=1.358
+              ['joint_5.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.00385 max=-0.00385
+                  [1]:
+                    ndarray shape=() dtype=float32 min=1.042 max=1.042
+              ['joint_9.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.2564 max=-0.2564
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.7145 max=0.7145
+              ['joint_13.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.255 max=-0.255
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.1661 max=0.1661
+              ['joint_2.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.253 max=-0.253
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.4116 max=0.4116
+              ['joint_6.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.1909 max=-0.1909
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.7783 max=0.7783
+              ['joint_10.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.2163 max=-0.2163
+                  [1]:
+                    ndarray shape=() dtype=float32 min=1.374 max=1.374
+              ['joint_14.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=0.7461 max=0.7461
+                  [1]:
+                    ndarray shape=() dtype=float32 min=1.685 max=1.685
+              ['joint_3.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.2043 max=-0.2043
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.2762 max=0.2762
+              ['joint_7.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.1616 max=-0.1616
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.5821 max=0.5821
+              ['joint_11.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.1731 max=-0.1731
+                  [1]:
+                    ndarray shape=() dtype=float32 min=1.079 max=1.079
+              ['joint_15.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.1953 max=-0.1953
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.1869 max=0.1869
+          ['residual_qpos']:
+            dict(22 keys)
+              ['L_forearm_tx_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=0.1757 max=0.3254
+              ['L_forearm_ty_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=0.008151 max=0.08721
+              ['L_forearm_tz_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=1.018 max=1.191
+              ['L_forearm_roll_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=-3.718 max=-2.044
+              ['L_forearm_pitch_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=-1.66 max=-0.5077
+              ['L_forearm_yaw_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=-0.8769 max=0.5765
+              ['joint_0.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.47 max=-0.2812
+              ['joint_4.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.3472 max=0.378
+              ['joint_8.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.47 max=0.47
+              ['joint_12.0']:
+                ndarray shape=(100,) dtype=float32 min=0.263 max=1.144
+              ['joint_1.0']:
+                ndarray shape=(100,) dtype=float32 min=0.2148 max=1.208
+              ['joint_5.0']:
+                ndarray shape=(100,) dtype=float32 min=0.1462 max=0.8916
+              ['joint_9.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.1064 max=0.5645
+              ['joint_13.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.105 max=0.01612
+              ['joint_2.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.103 max=0.2616
+              ['joint_6.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.04093 max=0.6283
+              ['joint_10.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.06635 max=1.224
+              ['joint_14.0']:
+                ndarray shape=(100,) dtype=float32 min=0.8961 max=1.535
+              ['joint_3.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.05428 max=0.1262
+              ['joint_7.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.01161 max=0.4321
+              ['joint_11.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.02312 max=0.9288
+              ['joint_15.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.04528 max=0.03695
+          ['qpos_targets']:
+            dict(22 keys)
+              ['L_forearm_tx_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=0.1757 max=0.3254
+              ['L_forearm_ty_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=0.01213 max=0.06925
+              ['L_forearm_tz_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=1.018 max=1.179
+              ['L_forearm_roll_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=-3.718 max=-2.044
+              ['L_forearm_pitch_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=-1.662 max=-0.5076
+              ['L_forearm_yaw_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=-0.8769 max=0.5765
+              ['joint_0.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.47 max=-0.2812
+              ['joint_4.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.3472 max=0.378
+              ['joint_8.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.47 max=0.47
+              ['joint_12.0']:
+                ndarray shape=(100,) dtype=float32 min=0.263 max=1.144
+              ['joint_1.0']:
+                ndarray shape=(100,) dtype=float32 min=0.2148 max=1.207
+              ['joint_5.0']:
+                ndarray shape=(100,) dtype=float32 min=0.1461 max=0.8916
+              ['joint_9.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.1064 max=0.5645
+              ['joint_13.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.105 max=0.01611
+              ['joint_2.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.103 max=0.2616
+              ['joint_6.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.04093 max=0.6283
+              ['joint_10.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.06636 max=1.224
+              ['joint_14.0']:
+                ndarray shape=(100,) dtype=float32 min=0.8961 max=1.535
+              ['joint_3.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.05428 max=0.1262
+              ['joint_7.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.01161 max=0.4321
+              ['joint_11.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.02312 max=0.9288
+              ['joint_15.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.04528 max=0.03694
+          ['num_frames']:
+            int: 100
+          ['kpts_data']:
+            dict(2 keys)
+              ['kpt_pos']:
+                ndarray shape=(100, 25, 3) dtype=float32 min=-0.2131 max=1.353
+              ['kpt_names']:
+                list(len=25)
+                  [0]:
+                    str: 'link_15.0_tip'
+                  [1]:
+                    str: 'link_11.0_tip'
+                  [2]:
+                    str: 'link_7.0_tip'
+                  ... (22 more)
+          ['wrist_pose']:
+            ndarray shape=(100, 7) dtype=float32 min=-0.8901 max=1.191
+      ['right']:
+        dict(7 keys)
+          ['init_qpos']:
+            dict(22 keys)
+              ['R_forearm_tx_link_joint']:
+                ndarray shape=() dtype=float32 min=-0.1142 max=-0.1142
+              ['R_forearm_ty_link_joint']:
+                ndarray shape=() dtype=float32 min=-0.01442 max=-0.01442
+              ['R_forearm_tz_link_joint']:
+                ndarray shape=() dtype=float32 min=1.132 max=1.132
+              ['R_forearm_roll_link_joint']:
+                ndarray shape=() dtype=float32 min=1.876 max=1.876
+              ['R_forearm_pitch_link_joint']:
+                ndarray shape=() dtype=float32 min=-3.811 max=-3.811
+              ['R_forearm_yaw_link_joint']:
+                ndarray shape=() dtype=float32 min=1.436 max=1.436
+              ['joint_0.0']:
+                ndarray shape=() dtype=float32 min=0.47 max=0.47
+              ['joint_4.0']:
+                ndarray shape=() dtype=float32 min=0.2848 max=0.2848
+              ['joint_8.0']:
+                ndarray shape=() dtype=float32 min=-0.47 max=-0.47
+              ['joint_12.0']:
+                ndarray shape=() dtype=float32 min=0.5192 max=0.5192
+              ['joint_1.0']:
+                ndarray shape=() dtype=float32 min=-0.196 max=-0.196
+              ['joint_5.0']:
+                ndarray shape=() dtype=float32 min=-0.196 max=-0.196
+              ['joint_9.0']:
+                ndarray shape=() dtype=float32 min=-0.196 max=-0.196
+              ['joint_13.0']:
+                ndarray shape=() dtype=float32 min=0.1276 max=0.1276
+              ['joint_2.0']:
+                ndarray shape=() dtype=float32 min=-0.174 max=-0.174
+              ['joint_6.0']:
+                ndarray shape=() dtype=float32 min=-0.04715 max=-0.04715
+              ['joint_10.0']:
+                ndarray shape=() dtype=float32 min=-0.06552 max=-0.06552
+              ['joint_14.0']:
+                ndarray shape=() dtype=float32 min=0.9891 max=0.9891
+              ['joint_3.0']:
+                ndarray shape=() dtype=float32 min=-0.227 max=-0.227
+              ['joint_7.0']:
+                ndarray shape=() dtype=float32 min=-0.01098 max=-0.01098
+              ['joint_11.0']:
+                ndarray shape=() dtype=float32 min=-0.01944 max=-0.01944
+              ['joint_15.0']:
+                ndarray shape=() dtype=float32 min=0.02652 max=0.02652
+          ['limits']:
+            dict(22 keys)
+              ['R_forearm_tx_link_joint']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.3142 max=-0.3142
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.2687 max=0.2687
+              ['R_forearm_ty_link_joint']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.3142 max=-0.3142
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.2567 max=0.2567
+              ['R_forearm_tz_link_joint']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=0.8076 max=0.8076
+                  [1]:
+                    ndarray shape=() dtype=float32 min=1.332 max=1.332
+              ['R_forearm_roll_link_joint']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=1.376 max=1.376
+                  [1]:
+                    ndarray shape=() dtype=float32 min=3.244 max=3.244
+              ['R_forearm_pitch_link_joint']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-5.189 max=-5.189
+                  [1]:
+                    ndarray shape=() dtype=float32 min=-3.311 max=-3.311
+              ['R_forearm_yaw_link_joint']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=0.75 max=0.75
+                  [1]:
+                    ndarray shape=() dtype=float32 min=2.364 max=2.364
+              ['joint_0.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=0.1624 max=0.1624
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.62 max=0.62
+              ['joint_4.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.1864 max=-0.1864
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.62 max=0.62
+              ['joint_8.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.62 max=-0.62
+                  [1]:
+                    ndarray shape=() dtype=float32 min=-0.3139 max=-0.3139
+              ['joint_12.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=0.3692 max=0.3692
+                  [1]:
+                    ndarray shape=() dtype=float32 min=1.546 max=1.546
+              ['joint_1.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.346 max=-0.346
+                  [1]:
+                    ndarray shape=() dtype=float32 min=-0.0133 max=-0.0133
+              ['joint_5.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.346 max=-0.346
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.06911 max=0.06911
+              ['joint_9.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.346 max=-0.346
+                  [1]:
+                    ndarray shape=() dtype=float32 min=-0.01631 max=-0.01631
+              ['joint_13.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.1663 max=-0.1663
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.2945 max=0.2945
+              ['joint_2.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.324 max=-0.324
+                  [1]:
+                    ndarray shape=() dtype=float32 min=-0.008547 max=-0.008547
+              ['joint_6.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.324 max=-0.324
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.1216 max=0.1216
+              ['joint_10.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.324 max=-0.324
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.1151 max=0.1151
+              ['joint_14.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=0.7932 max=0.7932
+                  [1]:
+                    ndarray shape=() dtype=float32 min=1.656 max=1.656
+              ['joint_3.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.377 max=-0.377
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.07919 max=0.07919
+              ['joint_7.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.377 max=-0.377
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.1545 max=0.1545
+              ['joint_11.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.377 max=-0.377
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.1506 max=0.1506
+              ['joint_15.0']:
+                tuple(len=2)
+                  [0]:
+                    ndarray shape=() dtype=float32 min=-0.2051 max=-0.2051
+                  [1]:
+                    ndarray shape=() dtype=float32 min=0.1956 max=0.1956
+          ['residual_qpos']:
+            dict(22 keys)
+              ['R_forearm_tx_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=-0.1142 max=0.06873
+              ['R_forearm_ty_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=-0.1142 max=0.05668
+              ['R_forearm_tz_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=1.008 max=1.132
+              ['R_forearm_roll_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=1.876 max=2.744
+              ['R_forearm_pitch_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=-4.689 max=-3.811
+              ['R_forearm_yaw_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=1.25 max=1.864
+              ['joint_0.0']:
+                ndarray shape=(100,) dtype=float32 min=0.3124 max=0.47
+              ['joint_4.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.03636 max=0.47
+              ['joint_8.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.47 max=-0.4639
+              ['joint_12.0']:
+                ndarray shape=(100,) dtype=float32 min=0.5192 max=1.396
+              ['joint_1.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.196 max=-0.1633
+              ['joint_5.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.196 max=-0.08089
+              ['joint_9.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.196 max=-0.1663
+              ['joint_13.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.01626 max=0.1445
+              ['joint_2.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.174 max=-0.1585
+              ['joint_6.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.174 max=-0.02844
+              ['joint_10.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.174 max=-0.03486
+              ['joint_14.0']:
+                ndarray shape=(100,) dtype=float32 min=0.9432 max=1.506
+              ['joint_3.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.227 max=-0.07081
+              ['joint_7.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.227 max=0.004517
+              ['joint_11.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.227 max=0.0005752
+              ['joint_15.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.0551 max=0.0456
+          ['qpos_targets']:
+            dict(22 keys)
+              ['R_forearm_tx_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=-0.1142 max=0.054
+              ['R_forearm_ty_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=-0.06604 max=0.05341
+              ['R_forearm_tz_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=1.005 max=1.133
+              ['R_forearm_roll_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=1.876 max=2.732
+              ['R_forearm_pitch_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=-4.695 max=-3.811
+              ['R_forearm_yaw_link_joint']:
+                ndarray shape=(100,) dtype=float32 min=1.305 max=1.849
+              ['joint_0.0']:
+                ndarray shape=(100,) dtype=float32 min=0.3523 max=0.47
+              ['joint_4.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.05273 max=0.47
+              ['joint_8.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.47 max=-0.4659
+              ['joint_12.0']:
+                ndarray shape=(100,) dtype=float32 min=0.5192 max=1.396
+              ['joint_1.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.196 max=-0.1932
+              ['joint_5.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.196 max=-0.0845
+              ['joint_9.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.196 max=-0.1883
+              ['joint_13.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.01309 max=0.1445
+              ['joint_2.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.174 max=-0.1698
+              ['joint_6.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.174 max=-0.02844
+              ['joint_10.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.174 max=-0.03488
+              ['joint_14.0']:
+                ndarray shape=(100,) dtype=float32 min=0.9432 max=1.509
+              ['joint_3.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.227 max=-0.07081
+              ['joint_7.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.227 max=0.004517
+              ['joint_11.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.227 max=0.0005743
+              ['joint_15.0']:
+                ndarray shape=(100,) dtype=float32 min=-0.01536 max=0.06168
+          ['num_frames']:
+            int: 100
+          ['kpts_data']:
+            dict(2 keys)
+              ['kpt_pos']:
+                ndarray shape=(100, 25, 3) dtype=float32 min=-0.2949 max=1.161
+              ['kpt_names']:
+                list(len=25)
+                  [0]:
+                    str: 'link_15.0_tip'
+                  [1]:
+                    str: 'link_3.0_tip'
+                  [2]:
+                    str: 'link_7.0_tip'
+                  ... (22 more)
+          ['wrist_pose']:
+            ndarray shape=(100, 7) dtype=float32 min=-0.7054 max=1.132
+  ['demo_state']:
+    ndarray shape=(100, 8) dtype=float32 min=-0.6705 max=2.655

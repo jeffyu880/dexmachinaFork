@@ -57,7 +57,7 @@ class RewardModule:
         self.exp_kpt_first = reward_cfg.get("exp_kpt_first", False)
         self.imi_rew_weight = reward_cfg["imi_rew_weight"]        
         self.imi_wrist_weight = reward_cfg.get("imi_wrist_weight", 0.0)
-        self.task_rew_weight = reward_cfg["task_rew_weight"] 
+        self.task_rew_weight = reward_cfg["task_rew_weight"]
         self.bc_rew_weight = reward_cfg.get("bc_rew_weight", 0.0)
         self.bc_wrist_weight = reward_cfg.get("bc_wrist_weight", 0.0)  
         self.demo_data = demo_data  
