@@ -5,57 +5,24 @@ set -o pipefail
 MAX_RETRIES=10
 SUCCESS=false
 
-# Error patterns to detect (case-insensitive)
-ERROR_PATTERNS=(
-    "TypeError"
-    "AttributeError"
-    "ValueError"
-    "RuntimeError"
-    "ImportError"
-    "ModuleNotFoundError"
-    "KeyError"
-    "IndexError"
-    "FileNotFoundError"
-    "OSError"
-    "AssertionError"
-)
-
 for attempt in $(seq 1 $MAX_RETRIES); do
     echo "[Attempt $attempt/$MAX_RETRIES] Running playback script..."
 
-    python examples/playback_kinematic_retargeted_hand.py --obj_name ketchup --record_video --vis --frames 30-130 2>&1
+    python examples/playback_kinematic_retargeted_hand.py \
+            --load_fname dexmachina/assets/retargeter_results/allegro_hand/s01/ketchup_use_01_vector.npy \
+            --record_video --vis 2>&1
     EXIT_CODE=$?
 
-    # Check if command succeeded
     if [ $EXIT_CODE -eq 0 ]; then
         echo "✓ Playback completed successfully"
         SUCCESS=true
         break
     fi
 
-    # Check for error patterns in output
-    ERROR_FOUND=false
-    for pattern in "${ERROR_PATTERNS[@]}"; do
-        if grep -qi "$pattern" /tmp/playback_output.log; then
-            echo "✗ Error detected: $pattern"
-            ERROR_FOUND=true
-            break
-        fi
-    done
-
-    if [ "$ERROR_FOUND" = true ] && [ $attempt -lt $MAX_RETRIES ]; then
+    echo "✗ Script failed with exit code $EXIT_CODE"
+    if [ $attempt -lt $MAX_RETRIES ]; then
         echo "Retrying in 15 seconds..."
         sleep 15
-        continue
-    elif [ $EXIT_CODE -ne 0 ]; then
-        echo "✗ Script failed with exit code $EXIT_CODE"
-        if [ $attempt -lt $MAX_RETRIES ]; then
-            echo "Retrying..."
-            sleep 15
-        fi
-    else
-        SUCCESS=true
-        break
     fi
 done
 
