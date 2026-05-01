@@ -246,7 +246,25 @@ def main(args):
         #         f.write(" ".join(str(x) for x in line) + "\n")
         # print(f"Saved structure to {struct_out}")
         demo_data = loaded_data.get('demo_data', {})
-        retargeter_results = loaded_data.get('retargeter_results', {})
+        # Build retargeter_results from physics-settled retarget_data (joint_qpos dict → flat array)
+        pt_retarget_data = loaded_data.get('retarget_data', {})
+        retargeter_results = {}
+        for side in ['left', 'right']:
+            side_data = pt_retarget_data.get(side, {})
+            joint_qpos_dict = side_data.get('joint_qpos', {})
+            if joint_qpos_dict:
+                # stack named joints into (T, num_dofs) array, converting tensors to numpy
+                arrays = []
+                for v in joint_qpos_dict.values():
+                    arr = v.cpu().numpy() if isinstance(v, torch.Tensor) else np.array(v)
+                    arrays.append(arr)
+                hand_qpos = np.stack(arrays, axis=1)  # (T, num_dofs)
+                retargeter_results[side] = {
+                    'hand_qpos': hand_qpos,
+                    'actuated_dof_names': list(joint_qpos_dict.keys()),
+                }
+            else:
+                retargeter_results[side] = loaded_data.get('retargeter_results', {}).get(side, {})
     print(f"Loaded from {args.load_fname} ({'IK npy' if is_ik else 'physics pt'})")
 
     # create the manipulation scene
