@@ -6,12 +6,12 @@ RETRY_DELAY=15
 
 
 for attempt in $(seq 1 $MAX_ATTEMPTS); do
-    echo "[Attempt $attempt/$MAX_ATTEMPTS] Running eval script..."
+    echo "[Attempt $attempt/$MAX_ATTEMPTS] Running train script..."
 
 # Define parameters once as associative arrays
 declare -A PARAMS=(
-    [batch_size]="-B 2"      # should be the num_envs
-    [epochs]="-obf -obt --max_epochs 2"
+    [batch_size]="-B 15000"      # should be the num_envs
+    [epochs]="-obf -obt --max_epochs 40"
     [object]="--actuate_object --retarget_name para --horizon 32"       # horizon is the number of env steps collected per actor before each PPO update cycle
     [learning]="-imw 0.5 --learning_rate 0.0003"
     [curriculum]="--gain_mode all --curr_schedule uniform --wait_epochs 200 --num_zero_epoch 500"
@@ -32,7 +32,7 @@ declare -A PARAMS=(
 # Build the training command once so we can log and execute the exact same args.
 CMD=(
     python dexmachina/rl/train_rl_games.py
-    --vis
+    # --vis
     ${PARAMS[batch_size]} 
     ${PARAMS[epochs]}
     ${PARAMS[object]}
