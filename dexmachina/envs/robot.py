@@ -989,6 +989,7 @@ class BaseRobot:
         return err
 
     def flush_episode_data(self):
+        # transposes the data from env-parallel format, into a trajectory format for saving
         if len(self.episode_data) == 0:
             return dict()
         jnames = self.actuated_dof_names    
