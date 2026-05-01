@@ -194,18 +194,24 @@ class BaseRobot:
             qposes[:] = np.array(default_qpos)
         qposes = torch.tensor(qposes, dtype=torch.float32, device=self.device)
         # repeat for each env
+        
+        self.is_eval = is_eval
+        
         self.init_qpos = qposes.unsqueeze(0).repeat(self.num_envs, 1) 
-        if 'init_qpos' in retarget_data and not robot_cfg['multi_demo']: 
+        if 'init_qpos' in retarget_data and not robot_cfg.get('multi_demo', False): 
             print("Using custom init qpos")
             self.set_custom_init_qpos(retarget_data['init_qpos'])
+        elif self.is_eval:
+            self.set_custom_init_qpos(retarget_data['init_qpos'])
+            print("evaluating, setting custom init qpos")
         else:
-            print("Skip settting custom init qpos using multiple demos")
+            print("Skip settting custom init qpos, using multiple demos")
       
-        self.is_eval = is_eval
-        if self.is_eval and self.num_envs > 1:
-            print('WARNING: setting robot.is_eval to True, setting the init_qpos for first env to 0s')
-            self.init_qpos[-1, :] = 0.0
-
+        
+        # if self.is_eval and self.num_envs > 1:
+        #     print('WARNING: setting robot.is_eval to True, setting the init_qpos for last env to 0s, as this is the one that the reference demo is using')
+        #     self.init_qpos[-1, :] = 0.0
+        
         # only take collision geoms for contact forces!
         coll_idxs_local, coll_idxs_global = [], []
         coll_link_names = []
@@ -227,7 +233,7 @@ class BaseRobot:
             print(f"Overwrite kpt_link_names with saved retarget data")
             link_names = retarget_data['kpts_data']['kpt_names']
         
-        print("LINK NAMES: ", link_names)
+        # print("LINK NAMES: ", link_names)
         self.set_kpt_links(link_names)
 
         self.kpt_markers = []
@@ -328,7 +334,7 @@ class BaseRobot:
             curr_qpos[:, idx] = qpos.clone().to(self.device)
         if demo_idx is not None:
             self.all_init_qpos[demo_idx] = curr_qpos[0]     # set_custom_init_qpos sets for all the enviornments 
-            print("SET ALL INIT QPOS SUCCESSFULLY")
+            # print("SET ALL INIT QPOS SUCCESSFULLY")
             # self.all_curr_targets[demo_idx] = curr_qpos.clone()       # this is set at reset_idx
         else:
             self.init_qpos = curr_qpos 
@@ -708,6 +714,7 @@ class BaseRobot:
 
         if self.randomize_observations:
             # randomize the kpt_pos, wrist_pos, dof_pos
+            # print("randomize observations")
             noisy_dof_pos = self.dof_pos + torch.randn_like(self.dof_pos) * self.max_joint_angle_noise
             obs_dict["dof_pos"] = unscale(noisy_dof_pos, self.dof_limits[:, 0], self.dof_limits[:, 1])
             obs_dict["dof_target_pos"] = obs_dict["dof_target_pos"] + torch.randn_like(obs_dict["dof_target_pos"]) * self.max_joint_angle_noise
@@ -857,7 +864,7 @@ class BaseRobot:
                 demo_ids = self.env_demo_idx[env_idxs]
                 self.residual_qpos = self.all_residual_qpos[demo_ids]       # setting the qpos for the enviornment to the demo
                 # self.residual_num_frames = self.all_residual_num_frames[demo_ids]   # setting the demo residual frames to the correct value
-                print(f"[RESET {self.name}] env_idxs={list(env_idxs)[:4]} demo_ids={demo_ids[:4].tolist()} starts={starts[:4].tolist()} all_qpos_shape={self.all_residual_qpos.shape}")
+                # print(f"[RESET {self.name}] env_idxs={list(env_idxs)[:4]} demo_ids={demo_ids[:4].tolist()} starts={starts[:4].tolist()} all_qpos_shape={self.all_residual_qpos.shape}")
             else:
                 init_qpos = self.residual_qpos[episode_start]
         elif self.env_demo_idx is not None and self.all_init_qpos is not None:
@@ -982,6 +989,7 @@ class BaseRobot:
         return err
 
     def flush_episode_data(self):
+        # transposes the data from env-parallel format, into a trajectory format for saving
         if len(self.episode_data) == 0:
             return dict()
         jnames = self.actuated_dof_names    

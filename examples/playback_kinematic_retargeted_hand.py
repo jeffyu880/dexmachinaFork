@@ -13,14 +13,19 @@ from os.path import join
 from pathlib import Path
 from copy import deepcopy
 import cv2
+import pickle
+
 
 from dexmachina.asset_utils import get_asset_path
-from dexmachina.envs.demo_data import get_demo_data 
+from dexmachina.envs.demo_data import get_demo_data, load_genesis_retarget_data 
 from dexmachina.envs.base_env import BaseEnv, get_env_cfg
 from dexmachina.envs.robot import BaseRobot, get_default_robot_cfg 
 from dexmachina.envs.object import ArticulatedObject, get_arctic_object_cfg
-from dexmachina.envs.constructors import get_common_argparser, parse_clip_string  
+from dexmachina.envs.constructors import get_common_argparser
 from dexmachina.retargeting.retarget_utils import compose_retarget_config, retarget_all_steps
+
+RETARGETER_RESULTS_DIR=get_asset_path("retargeter_results")
+
 
 def set_entities_to_step(hand_entities, retargeter_results, step, device):
     for side, hand in hand_entities.items():
@@ -154,7 +159,7 @@ def create_scene(args, object_name, urdfs, demo_data):
         
     return scene, hand_entities, obj, cam
 
-def main(args):
+def main(args):  
     num_envs = 1
     
     urdfs = dict()
@@ -165,34 +170,107 @@ def main(args):
         urdf_path = config[side]['urdf_path']
         urdfs[side] = join(robot_dir, urdf_path)  
 
-    # get path to retargeted demonstration and load demo_data
+    # load_fname is directly the retargeted file:
+    #   .pt  → dexmachina/assets/retargeted/allegro_hand/s01/ketchup_use_01_vector_para.pt
+    #   .npy → dexmachina/assets/retargeter_results/allegro_hand/s01/ketchup_use_01_vector.npy
+    # if not os.path.isabs(args.load_fname):
+    #     args.load_fname = os.path.join(get_asset_path(".."), args.load_fname)
     assert os.path.exists(args.load_fname), f"load_fname={args.load_fname} does not exist"
-    subject_name = args.load_fname.split("/")[-2]
     hand_name = args.hand if 'hand' in args.hand else f"{args.hand}_hand"
     retarget_type = 'position' if hand_name == 'shadow_hand' else 'vector'
-    
-    # Construct path to saved .pt file from parallel_retarget
-    traj_name = args.load_fname.split("/")[-1].replace(".npy", "")
-    save_fname = f"dexmachina/assets/retargeted/{hand_name}/{subject_name}/{traj_name}_{retarget_type}_para.pt"
-    
-    if os.path.exists(save_fname):
-        loaded_data = torch.load(save_fname, weights_only=False)
-        demo_data = loaded_data.get('demo_data', {})
-        print(f"Loaded demo_data from {save_fname}")
+
+    subject_name = args.load_fname.split("/")[-2]  # e.g. s01
+    fname_stem = os.path.basename(args.load_fname)  # e.g. ketchup_use_01_vector_para.pt
+
+    is_ik = args.load_fname.endswith(".npy")
+
+    # parse traj_name: strip retarget_type suffix (and save_name for .pt)
+    # e.g. ketchup_use_01_vector_para → ketchup_use_01
+    traj_name = fname_stem.replace(f"_{retarget_type}_para.pt", "").replace(f"_{retarget_type}.npy", "")
+    use_clip_str = traj_name.split("_use_")[-1] if "_use_" in traj_name else "01"
+    obj_name = traj_name.split("_use_")[0] if "_use_" in traj_name else traj_name
+
+    def print_struct(obj, indent=0):
+        struct_lines = []
+        prefix = "  " * indent
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if isinstance(v, dict):
+                    struct_lines.append(f"{prefix}{k}: dict")
+                    struct_lines.extend(print_struct(v, indent + 1))
+                elif isinstance(v, (np.ndarray, torch.Tensor)):
+                    struct_lines.append(f"{prefix}{k}: {type(v).__name__} shape={tuple(v.shape)} dtype={v.dtype}")
+                elif isinstance(v, list):
+                    struct_lines.append(f"{prefix}{k}: list len={len(v)}")
+                else:
+                    struct_lines.append(f"{prefix}{k}: {type(v).__name__} = {v}")
+        else:
+            struct_lines.append(f"{prefix}{type(obj).__name__}")
+        return struct_lines
+
+    if is_ik:
+        retargeter_results = np.load(args.load_fname, allow_pickle=True).item()
+        # struct_lines = [f"Source: .npy (pure kinematic IK)"] + print_struct(retargeter_results)
+        # struct_out = args.load_fname.replace(".npy", "_structure.txt")
+        # with open(struct_out, "w") as f:
+        #     f.write("\n".join(struct_lines) + "\n")
+        #     f.write("left hand qpos: \n")
+        #     for i in range(600):
+        #         line = retargeter_results['left']['hand_qpos'][i]
+        #         f.write(" ".join(str(x) for x in line) + "\n")
+        #     for i in range(600):
+        #         line = retargeter_results['right']['hand_qpos'][i]
+        #         f.write(" ".join(str(x) for x in line) + "\n")
+        # print(f"Saved structure to {struct_out}")
+        num_frames = retargeter_results['left']['hand_qpos'].shape[0]
+        demo_data = get_demo_data(
+            obj_name=obj_name,
+            hand_name=hand_name,
+            frame_start=0,
+            frame_end=num_frames,
+            use_clip=use_clip_str,
+            subject_name=subject_name,
+        )
     else:
-        raise FileNotFoundError(f"Retargeted file not found: {save_fname}. Run parallel_retarget.py first with --save flag.")
-    
+        loaded_data = torch.load(args.load_fname, weights_only=False)
+        # struct_lines = [f"Source: .pt (physics-settled)"] + print_struct(loaded_data)
+        # struct_out = args.load_fname.replace(".pt", "_structure.txt")
+        # with open(struct_out, "w") as f:
+        #     f.write("\n".join(struct_lines) + "\n")
+        #     f.write("left hand qpos: \n")
+        #     for i in range(600):
+        #         line = loaded_data['retargeter_results']['left']['hand_qpos'][i]
+        #         f.write(" ".join(str(x) for x in line) + "\n")
+        #     for i in range(600):
+        #         line = loaded_data['retargeter_results']['right']['hand_qpos'][i]
+        #         f.write(" ".join(str(x) for x in line) + "\n")
+        # print(f"Saved structure to {struct_out}")
+        demo_data = loaded_data.get('demo_data', {})
+        # Build retargeter_results from physics-settled retarget_data (joint_qpos dict → flat array)
+        pt_retarget_data = loaded_data.get('retarget_data', {})
+        retargeter_results = {}
+        for side in ['left', 'right']:
+            side_data = pt_retarget_data.get(side, {})
+            joint_qpos_dict = side_data.get('joint_qpos', {})
+            if joint_qpos_dict:
+                # stack named joints into (T, num_dofs) array, converting tensors to numpy
+                arrays = []
+                for v in joint_qpos_dict.values():
+                    arr = v.cpu().numpy() if isinstance(v, torch.Tensor) else np.array(v)
+                    arrays.append(arr)
+                hand_qpos = np.stack(arrays, axis=1)  # (T, num_dofs)
+                retargeter_results[side] = {
+                    'hand_qpos': hand_qpos,
+                    'actuated_dof_names': list(joint_qpos_dict.keys()),
+                }
+            else:
+                retargeter_results[side] = loaded_data.get('retargeter_results', {}).get(side, {})
+    print(f"Loaded from {args.load_fname} ({'IK npy' if is_ik else 'physics pt'})")
+
     # create the manipulation scene
-    scene, hand_entities, obj, cam = create_scene(args, args.obj_name, urdfs, demo_data)
+    scene, hand_entities, obj, cam = create_scene(args, obj_name, urdfs, demo_data)
 
     device = torch.device('cuda:0')
-
-    # Load retargeter results
-    retarget_fname = join(
-        f"dexmachina/assets/retargeter_results/{hand_name}/{subject_name}", 
-        args.load_fname.split("/")[-1].replace(".npy", f"_{retarget_type}.npy")
-    )
-    retargeter_results = np.load(retarget_fname, allow_pickle=True).item()
 
     # Build scene
     scene.build(n_envs=num_envs, env_spacing=(2.0, 2.0))
@@ -234,7 +312,8 @@ def main(args):
     # Collect playback trajectory
     playback_trajectory = {
         'obj_state': [],     # actual object state during playback
-        'demo_state': [],    # ground truth demonstration state
+        'object_demo_state': [],    # ground truth object demonstration state
+        'hand_qpos': {side: [] for side in hand_entities},  # hand joint positions at each step
     }
     
     # Initialize frame collection for video
@@ -268,10 +347,16 @@ def main(args):
             obj_state = np.concatenate([obj.root_pos[0].cpu().numpy(), obj.root_quat[0].cpu().numpy(), obj.dof_pos[0].cpu().numpy()])
             playback_trajectory['obj_state'].append(obj_state)
             
-            # Get demo state at this step (ground truth)
+            # Get object demo state at this step (ground truth)
             demo_state = np.concatenate([obj_pos[step].cpu().numpy(), obj_quat[step].cpu().numpy(), obj_arti[step].cpu().numpy().flatten()])
-            playback_trajectory['demo_state'].append(demo_state)
-            
+            playback_trajectory['object_demo_state'].append(demo_state)
+
+            # Record hand joint positions
+            for side, hand in hand_entities.items():
+                joint_idxs = [joint.dof_idx_local for joint in hand.joints if joint.type in [gs.JOINT_TYPE.REVOLUTE, gs.JOINT_TYPE.PRISMATIC]]
+                qpos = hand.get_dofs_position(joint_idxs)[0].cpu().numpy()
+                playback_trajectory['hand_qpos'][side].append(qpos)
+
             # Print hand z position for first step in range
             if step == start_frame:
                 for side, hand in hand_entities.items():
@@ -320,11 +405,14 @@ def main(args):
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         
         # Create video directory if needed
-        video_dir = Path(args.video_dir)
+        video_dir = Path(os.path.join(args.video_dir, args.hand, subject_name))
         video_dir.mkdir(parents=True, exist_ok=True)
         
         # Create video file path
-        video_fname = video_dir / f"{args.hand}_kinematic_retargeting_{args.obj_name}_{start_frame}_{end_frame}.mp4"
+        if is_ik:
+            video_fname = video_dir/f"{args.hand}_{subject_name}_u{use_clip_str}_pure_IK_{obj_name}_{start_frame}_{end_frame}.mp4"
+        else:    
+            video_fname = video_dir / f"{args.hand}_{subject_name}_u{use_clip_str}_IK_and_smoothing_{obj_name}_{start_frame}_{end_frame}.mp4"
         out = cv2.VideoWriter(str(video_fname), fourcc, fps, (frame_width, frame_height))
         
         for frame in frames:
@@ -339,28 +427,27 @@ def main(args):
     # Save playback trajectory to .npy file
     playback_trajectory = {
         'obj_state': np.array(playback_trajectory['obj_state']),     # shape (T, 8)
-        'demo_state': np.array(playback_trajectory['demo_state']),   # shape (T, 8)
+        'object_demo_state': np.array(playback_trajectory['object_demo_state']),   # shape (T, 8)
+        'hand_qpos': {side: np.array(qpos_list) for side, qpos_list in playback_trajectory['hand_qpos'].items()},  # shape (T, num_dofs) per side
     }
-    
-    # Extract use_clip number from traj_name (e.g., "ketchup_use_01" -> "01")
-    use_clip = traj_name.split("_use_")[-1] if "_use_" in traj_name else "unknown"
     
     # Create output directory structure: kinematic_playback/{hand_name}/{subject_name}/
     output_base_dir = "/home/jeffrey/Documents/Manipulation/Genesis/dexmachina/dexmachina/assets/kinematic_playback"
     hand_folder = os.path.join(output_base_dir, args.hand, subject_name)
     os.makedirs(hand_folder, exist_ok=True)
     
-    output_fname = os.path.join(hand_folder, f"playback_{args.obj_name}_use_{use_clip}_{start_frame}_{end_frame}.npy")
-    np.save(output_fname, playback_trajectory)
+    src_tag = "npy" if is_ik else "pt"
+    output_fname = os.path.join(hand_folder, f"playback_{obj_name}_use_{use_clip_str}_{start_frame}_{end_frame}_{src_tag}.pkl")
+    with open(output_fname, "wb") as f:
+        pickle.dump(playback_trajectory, f)
     print(f"\nSaved playback trajectory to {output_fname}")
     print(f"  obj_state shape: {playback_trajectory['obj_state'].shape}")
-    print(f"  demo_state shape: {playback_trajectory['demo_state'].shape}")
+    print(f"  demo_state shape: {playback_trajectory['object_demo_state'].shape}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Playback retargeted hand animation")
-    parser.add_argument('--load_fname', '-lf', type=str, default='dexmachina/assets/contact_retarget/allegro_hand/s02/ketchup_use_01.npy')
+    parser.add_argument('--load_fname', '-lf', required=True, help="Trajectory to playback, either a .pt or .npy file")
     parser.add_argument('--hand', type=str, default='allegro_hand', help='Hand model name')
-    parser.add_argument("--obj_name", type=str, help="Name of the object being manipulated")
     parser.add_argument('--retarget_name', type=str, default='para', help='Retargeting save name')
     parser.add_argument('--vis', action='store_true', help='Show viewer')
     parser.add_argument('--playback_fps', type=float, default=30, help='Playback FPS')

@@ -155,8 +155,7 @@ class RewardModule:
             self.all_demo_tensors[key] = torch.stack([t[key] for t in per_demo_tensors], dim=0)
         self.demo_tensors = {k: v for k, v in per_demo_tensors[0].items()}
         self.demo_length = self.all_demo_lengths[0]
-        print(len(self.all_demo_tensors['obj_pos']))
-        print(self.all_demo_lengths)
+        print(f"Loaded all demos: { {k: v.shape for k, v in self.all_demo_tensors.items()} }")
 
     def assign_env_demos_round_robin(self, num_envs, device):
         """Assign each env a fixed demo index via round-robin: env i -> demo i % num_demos."""

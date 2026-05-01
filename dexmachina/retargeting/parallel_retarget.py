@@ -286,14 +286,14 @@ def gather_parallel_save_data(hands, retar_data):
     """ need to concatenate all the env id threads into one long (num_demo_step, num_joints) tensor for saving"""
     retarget_data = dict()
     for side, hand in hands.items():
-        retarget_data[side] = hand.flush_episode_data()
+        retarget_data[side] = hand.flush_episode_data()     # takes the paralle retargetted data, formats it to trajectory format and also appends other information to the dictionary
         for k, v in retarget_data[side].items():
             if isinstance(v, torch.Tensor):
                 print(f"Reshaping {k} from {v.shape} to {v[0].shape}")
                 retarget_data[side][k] = v[0] # get rid of the first dim!
     return dict( 
-        retarget_data=retarget_data, # this is from the robots
-        retargeter_results=retar_data
+        retarget_data=retarget_data, # this is from the robots, takes the rollout data and expands it
+        retargeter_results=retar_data   
         ) 
 
 def resample_hand_qpos(hand, hand_qpos, c_steps, min_controlled_steps=100, resample_range=[10, 50], error_threshold=0.1):

@@ -256,8 +256,11 @@ def gather_object_state_tensor(demo_data):
     arr = np.concatenate([obj_pos, obj_quat, obj_arti], axis=1)
     return torch.tensor(arr).float()
 
-def eval_one_episode(env, agent, obj_state_tensor, print_rew=False, record_video=False, show_reference=False):
+def eval_one_episode(env, agent, obj_state_tensor, print_rew=False, record_video=False, show_reference=False, save_traj=False):
     obs = env.reset() 
+    
+    # print("Obs: ", obs)
+    
     if isinstance(obs, dict):
         obs = obs["obs"]
     # required: enables the flag for batched observations
@@ -314,7 +317,6 @@ def eval_one_episode(env, agent, obj_state_tensor, print_rew=False, record_video
                         ) 
             obs, rew, dones, infos = env.step(actions) 
             obj_pos, obj_quat, obj_arti = obj.root_pos, obj.root_quat, obj.dof_pos
-            # print(f"Step {env_step}: Obj pos: {obj_pos.cpu().numpy()}")
             obj_state = torch.cat([obj_pos, obj_quat, obj_arti], dim=-1)
             eval_data["obj_state"].append(obj_state.cpu().numpy())
             eval_data["demo_state"].append(demo_state.cpu().numpy())
@@ -332,6 +334,26 @@ def eval_one_episode(env, agent, obj_state_tensor, print_rew=False, record_video
             for key, val in obj_obs.items():
                 eval_data[f"obj_{key}"].append(val.cpu().numpy() if hasattr(val, 'cpu') else val)
 
+            if env_step == 0:
+                print(f"\n========== EVAL DEBUG STEP 0 ==========")
+                print(f"obs shape: {obs.shape}, min: {obs.min():.3f}, max: {obs.max():.3f}")
+                print(f"actions shape: {actions.shape}, min: {actions.min():.3f}, max: {actions.max():.3f}")
+                print(f"obj_pos (sim):  {obj_pos[0].cpu().numpy().round(3)}")
+                print(f"obj_pos (demo): {demo_state[:3].cpu().numpy().round(3)}")
+                print(f"obj_quat (sim):  {obj_quat[0].cpu().numpy().round(3)}")
+                print(f"obj_quat (demo): {demo_state[3:7].cpu().numpy().round(3)}")
+                print(f"left  residual_qpos shape: {joint_target_left.shape}, step0: {joint_target_left[0].cpu().numpy().round(3)}")
+                print(f"right residual_qpos shape: {joint_target_right.shape}, step0: {joint_target_right[0].cpu().numpy().round(3)}")
+                print(f"left  curr_targets[0]: {left_hand.curr_targets[0].cpu().numpy().round(3)}")
+                print(f"right curr_targets[0]: {right_hand.curr_targets[0].cpu().numpy().round(3)}")
+                print(f"left  wrist_pose[0]: {left_hand.wrist_pose[0].cpu().numpy().round(3)}")
+                print(f"right wrist_pose[0]: {right_hand.wrist_pose[0].cpu().numpy().round(3)}")
+                ep_buf = uenv.episode_length_buf
+                demo_wrist_left  = uenv.reward_module.match_demo_state("wrist_pose_left",  ep_buf)
+                demo_wrist_right = uenv.reward_module.match_demo_state("wrist_pose_right", ep_buf)
+                print(f"left  wrist_pose target[0]: {demo_wrist_left[0].cpu().numpy().round(3)}")
+                print(f"right wrist_pose target[0]: {demo_wrist_right[0].cpu().numpy().round(3)}")
+                print(f"========================================\n")
             # rew_dict = uenv.rew_dict
             # for key in ['pos_dist', 'rot_dist', 'arti_dist']:
             #     eval_data[key].append(rew_dict[key].cpu().numpy())
@@ -468,7 +490,8 @@ def main():
     parser.add_argument('--video_fname', '-of', type=str, default="-eval.mp4") # if not provided, save in the same folder as the checkpoint
     parser.add_argument('--camera_angle', '-cam', type=str, default='front', choices=['front', 'top', 'side', 'back', 'isometric'], help='Camera angle for video recording')
     parser.add_argument('--resolution', '-res', type=int, default=1024, help='Video resolution in pixels (512-4096, default 1024)')
-    
+    parser.add_argument('--demo_idx', '-di', type=int, default=None, help='Index of demo to use as reference (for multi-demo checkpoints). If not set, prompts interactively.')
+    parser.add_argument('--save_traj', action='store_true', help='Record object and hand policy trajectory and demo trajectory')
     args = parser.parse_args()
 
     # Convert checkpoint path to absolute path if relative
@@ -497,10 +520,11 @@ def main():
 
     video_fname = join(ckpt_data_folder, f"video.mp4")
     if args.output_render:
-        render_dir = os.path.join(args.render_dir, run_name)
-        print('Saving video to a different folder')
-        video_fname = os.path.join(render_dir, ckpt_name.split(".")[0] + args.camera_angle + args.video_fname)
-        os.makedirs(render_dir, exist_ok=True)
+        render_dir = ckpt_data_folder
+        # render_dir = os.path.join(ckpt_data_folder, run_name)
+        # print('Saving video to a different folder')
+        video_fname = os.path.join(ckpt_data_folder, ckpt_name.replace(".pth", ".mp4"))
+        os.makedirs(ckpt_data_folder, exist_ok=True)
 
     assert os.path.exists(saved_cfg_fname), f"File {saved_cfg_fname} does not exist"
     # load to pkl
@@ -512,7 +536,7 @@ def main():
     env_kwargs = remap_paths_in_config(env_kwargs, server_username='jsyu')
     
     assert env_kwargs['env_cfg']['use_rl_games'], "The saved environment is not from rl-games"
-    
+
     if args.raytrace and args.record_video:
         env_kwargs['env_cfg']['scene_kwargs']['raytrace'] = True
 
@@ -562,9 +586,32 @@ def main():
     env_kwargs.pop("curriculum_cfg")
     
     # Load reference clip BEFORE creating environment so demo_data is correct from the start
-    if args.reference_clip is not None:
-        print(f"\n[INFO] Loading alternative reference clip: {args.reference_clip}")
+    demo_tag = None   # set below for multi-demo checkpoints; used in output filenames
+    all_demo_names = env_kwargs.get('all_demo_names', None)
+    if all_demo_names and len(all_demo_names) > 1:
+        if args.reference_clip is not None:
+            print("Warning, using multi-demo loading, so ignoring the argument reference_clip")
+        # Multi-demo checkpoint: prompt user or use --demo_idx
+        print("\nMultiple demos found in checkpoint:")
+        for i, name in enumerate(all_demo_names):
+            print(f"  [{i}] {name}")
+        chosen = args.demo_idx if args.demo_idx is not None else int(input(f"Select demo index [0-{len(all_demo_names)-1}]: "))
+        assert 0 <= chosen < len(all_demo_names), f"Invalid demo index {chosen}"
+        print(f"[INFO] Using demo [{chosen}]: {all_demo_names[chosen]}")
+        # collapse to single demo so _setup_multi_demo doesn't round-robin across all demos
+        env_kwargs['demo_data'] = env_kwargs['all_demo_data'][chosen]
+        env_kwargs['retarget_data'] = env_kwargs['all_retarget_data'][chosen]
+        # env_kwargs['all_demo_data'] = [env_kwargs['all_demo_data'][chosen]]
+        # env_kwargs['all_retarget_data'] = [env_kwargs['all_retarget_data'][chosen]]
+        # env_kwargs['all_demo_names'] = [all_demo_names[chosen]]
+        demo_tag = all_demo_names[chosen].replace("/", "_")
+        video_fname = join(ckpt_data_folder, f"video_{demo_tag}.mp4")
+        if args.output_render:
+            video_fname = os.path.join(render_dir, ckpt_name.split(".")[0] + f"_{demo_tag}" + args.video_fname)
+
+    elif args.reference_clip is not None: # using a single but alternative demo than the one stored in the env.pkl
         from dexmachina.envs.demo_data import get_demo_data, load_genesis_retarget_data
+        print(f"\n[INFO] Loading alternative reference clip: {args.reference_clip}")
         # Parse reference clip
         obj_name_ref, start, end, subject_name, use_clip = parse_clip_string(args.reference_clip)
         # Use the hand type from the training checkpoint, not command-line default
@@ -599,9 +646,7 @@ def main():
         env_kwargs['retarget_data'] = ref_retarget_data
     else:
         print(f"[INFO] Using training clip reference trajectory")
-        demo_data = env_kwargs['demo_data']
-
-      
+            
     device = torch.device('cuda:0')
     import genesis as gs
     gs.init(backend=gs.gpu, logging_level='warning')
@@ -641,7 +686,7 @@ def main():
     print(f"[INFO] Saved ketchup init quaternion: {obj_init_quat}")
     # Load object mesh for ADD metric
     object_models = load_object_model_for_evaluation(obj_name)
-    obj_state_tensor = gather_object_state_tensor(demo_data)
+    obj_state_tensor = gather_object_state_tensor(env_kwargs['demo_data'])
 
     agent_cfg_fname = get_rl_config_path("rl_games_ppo_cfg")
     
@@ -672,7 +717,12 @@ def main():
 
     for eps in range(args.eval_episodes):
         frames, eval_data = eval_one_episode(
-            env, agent, obj_state_tensor, args.print_rew, args.record_video, args.show_reference
+            env, agent, 
+            obj_state_tensor, 
+            args.print_rew, 
+            args.record_video, 
+            args.show_reference,
+            args.save_traj
             )
         
         # if object_models is not None:
@@ -722,13 +772,40 @@ def main():
         #     except Exception as e:
         #         print(f"✗ Error saving ADD metrics JSON: {e}")
         
-        npy_base = args.npy_name if args.npy_name is not None else "eval"
-        ckpt_eval_fname = os.path.join(ckpt_data_folder, f"{npy_base}_ep{eps}.npy")
-        np.save(ckpt_eval_fname, eval_data)
+        npy_base = args.npy_name if args.npy_name is not None else (demo_tag if demo_tag is not None else "eval")
+        ckpt_eval_fname = os.path.join(ckpt_data_folder, f"{npy_base}")
+        np.save(f"{ckpt_eval_fname}.npy", eval_data)
         print(f"Saved eval data to {ckpt_eval_fname}")
         # try loading the data
-        # eval_data = np.load(ckpt_eval_fname, allow_pickle=True).item() 
-        if args.record_video: 
+        # eval_data = np.load(ckpt_eval_fname, allow_pickle=True).item()
+
+        if args.save_traj:
+            def to_cpu(obj):
+                if isinstance(obj, torch.Tensor):
+                    return obj.detach().cpu().numpy()
+                if isinstance(obj, dict):
+                    return {k: to_cpu(v) for k, v in obj.items()}
+                if isinstance(obj, (list, tuple)):
+                    return type(obj)(to_cpu(v) for v in obj)
+                return obj
+
+            pkl_data = to_cpu({
+                'policy_obj_state': eval_data['obj_state'],
+                'policy_left_hand': {k.removeprefix('left_hand_'): v
+                                      for k, v in eval_data.items() if k.startswith('left_hand_')},
+                'policy_right_hand': {k.removeprefix('right_hand_'): v
+                                       for k, v in eval_data.items() if k.startswith('right_hand_')},
+                'demo_obj': env_kwargs['demo_data'],
+                'demo_robot': env_kwargs.get('retarget_data', {}),
+                'demo_state': eval_data['demo_state'],
+            })
+            
+            pkl_fname = f"{ckpt_eval_fname}.pkl"
+            with open(pkl_fname, 'wb') as f:
+                pickle.dump(pkl_data, f)
+            print(f"Saved pkl data to {pkl_fname}")
+
+        if args.record_video:
             # save video with opencv (cv2)
             import cv2
             fps = int(1/uenv.dt/2)

@@ -222,11 +222,18 @@ def main():
     
     # set number of actors into agent config
     agent_cfg["params"]["config"]["num_actors"] = env.unwrapped.num_envs
+    print("env_unwrapped: ", env.unwrapped.num_envs)
+    print("args num_envs: ", args.num_envs)
     agent_cfg["params"]["config"]["minibatch_size"] = int(args.num_envs * 8)
-    agent_cfg["params"]["config"]["mini_epochs"] = max(1, int(args.num_envs / 4096 * 5))
+    if args.multi_demo:
+        agent_cfg["params"]["config"]["mini_epochs"] = min(5, max(1, int(args.num_envs / 4096 * 5))) 
+        # print("Mini epochs: ", agent_cfg["params"]["config"]["mini_epochs"])       
+        # limiting the number of mini_epochs to 5 so that the policy does not drift too far when training with multiple demonstrations
+    else:
+        agent_cfg["params"]["config"]["mini_epochs"] = max(1, int(args.num_envs / 4096 * 5))    
     agent_cfg["params"]["config"]["num_steps_per_env"] = args.horizon
     agent_cfg["params"]["config"]["learning_rate"] = args.learning_rate
-    
+        
     env_save_kwargs = env_kwargs.copy()
     # pop the demo data and retargeted data (too large to save)
     env_save_kwargs.pop('demo_data')
@@ -257,7 +264,7 @@ def main():
     )
     
     # Save configuration
-    ckpt_data_folder = os.path.join(log_root_path, f"{exp_name}_stage0")
+    ckpt_data_folder = os.path.join(log_root_path, f"{exp_name}")
     os.makedirs(ckpt_data_folder, exist_ok=True)
     
     param_folder = os.path.join(ckpt_data_folder, "params")
