@@ -12,7 +12,7 @@ for attempt in $(seq 1 $MAX_RETRIES); do
     echo "[Attempt $attempt/$MAX_RETRIES] Running playback script..."
 
     python examples/playback_kinematic_retargeted_hand.py \
-            --load_fname dexmachina/assets/retargeter_results/allegro_hand/s01/ketchup_use_01_vector.npy \
+            --load_fname dexmachina/assets/retargeted/allegro_hand/s01/ketchup_use_01_vector_para.pt \
             --record_video --vis 2>&1
     EXIT_CODE=$?
 

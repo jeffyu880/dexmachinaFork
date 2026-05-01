@@ -31,18 +31,39 @@ def describe(val, indent=0):
         return f"{pad}{type(val).__name__}: {val!r}"
 
 
+def first_n_lines(data, n=5):
+    lines = []
+    if isinstance(data, dict):
+        for k, v in data.items():
+            lines.append(f"\n['{k}']:")
+            if isinstance(v, (np.ndarray, torch.Tensor)):
+                for i in range(min(n, len(v))):
+                    lines.append(f"  [{i}]: {v[i]}")
+            else:
+                lines.append(f"  {v}")
+    return "\n".join(lines)
+
+
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python read_single_pkl.py <path_to_pkl> [output.txt]")
+        print("Usage: python read_single_pkl.py <path_to_pkl> [n] [output.txt]")
         sys.exit(1)
 
     pkl_path = sys.argv[1]
-    out_path = sys.argv[2] if len(sys.argv) >= 3 else pkl_path + "_contents.txt"
+    n = int(sys.argv[2]) if len(sys.argv) >= 3 and sys.argv[2].isdigit() else 5
+    out_path = sys.argv[2] if len(sys.argv) >= 3 and not sys.argv[2].isdigit() else (
+        sys.argv[3] if len(sys.argv) >= 4 else pkl_path + "_contents.txt"
+    )
 
     with open(pkl_path, "rb") as f:
         data = pickle.load(f)
 
-    output = f"File: {pkl_path}\n{'=' * 60}\n" + describe(data) + "\n"
+    output = (
+        f"File: {pkl_path}\n{'=' * 60}\n"
+        + describe(data) + "\n"
+        + f"\nFirst {n} elements of each key:\n"
+        + first_n_lines(data, n) + "\n"
+    )
 
     with open(out_path, "w") as f:
         f.write(output)
