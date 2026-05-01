@@ -5,6 +5,9 @@ set -o pipefail
 MAX_RETRIES=10
 SUCCESS=false
 
+# dexmachina/assets/retargeted/allegro_hand/s01/ketchup_use_01_vector_para.pt
+# dexmachina/assets/retargeter_results/allegro_hand/s01/ketchup_use_01_vector.npy
+
 for attempt in $(seq 1 $MAX_RETRIES); do
     echo "[Attempt $attempt/$MAX_RETRIES] Running playback script..."
 

@@ -13,9 +13,11 @@ from os.path import join
 from pathlib import Path
 from copy import deepcopy
 import cv2
+import pickle
+
 
 from dexmachina.asset_utils import get_asset_path
-from dexmachina.envs.demo_data import get_demo_data 
+from dexmachina.envs.demo_data import get_demo_data, load_genesis_retarget_data 
 from dexmachina.envs.base_env import BaseEnv, get_env_cfg
 from dexmachina.envs.robot import BaseRobot, get_default_robot_cfg 
 from dexmachina.envs.object import ArticulatedObject, get_arctic_object_cfg
@@ -188,10 +190,38 @@ def main(args):
     use_clip_str = traj_name.split("_use_")[-1] if "_use_" in traj_name else "01"
     obj_name = traj_name.split("_use_")[0] if "_use_" in traj_name else traj_name
 
+    def print_struct(obj, indent=0):
+        struct_lines = []
+        prefix = "  " * indent
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if isinstance(v, dict):
+                    struct_lines.append(f"{prefix}{k}: dict")
+                    struct_lines.extend(print_struct(v, indent + 1))
+                elif isinstance(v, (np.ndarray, torch.Tensor)):
+                    struct_lines.append(f"{prefix}{k}: {type(v).__name__} shape={tuple(v.shape)} dtype={v.dtype}")
+                elif isinstance(v, list):
+                    struct_lines.append(f"{prefix}{k}: list len={len(v)}")
+                else:
+                    struct_lines.append(f"{prefix}{k}: {type(v).__name__} = {v}")
+        else:
+            struct_lines.append(f"{prefix}{type(obj).__name__}")
+        return struct_lines
+
     if is_ik:
-        # pure kinematic IK .npy — retar_data is stored directly
-        print("Storing the IK playback")
         retargeter_results = np.load(args.load_fname, allow_pickle=True).item()
+        # struct_lines = [f"Source: .npy (pure kinematic IK)"] + print_struct(retargeter_results)
+        # struct_out = args.load_fname.replace(".npy", "_structure.txt")
+        # with open(struct_out, "w") as f:
+        #     f.write("\n".join(struct_lines) + "\n")
+        #     f.write("left hand qpos: \n")
+        #     for i in range(600):
+        #         line = retargeter_results['left']['hand_qpos'][i]
+        #         f.write(" ".join(str(x) for x in line) + "\n")
+        #     for i in range(600):
+        #         line = retargeter_results['right']['hand_qpos'][i]
+        #         f.write(" ".join(str(x) for x in line) + "\n")
+        # print(f"Saved structure to {struct_out}")
         num_frames = retargeter_results['left']['hand_qpos'].shape[0]
         demo_data = get_demo_data(
             obj_name=obj_name,
@@ -202,8 +232,19 @@ def main(args):
             subject_name=subject_name,
         )
     else:
-        # physics-settled .pt — demo_data is embedded, retargeter_results under key
         loaded_data = torch.load(args.load_fname, weights_only=False)
+        # struct_lines = [f"Source: .pt (physics-settled)"] + print_struct(loaded_data)
+        # struct_out = args.load_fname.replace(".pt", "_structure.txt")
+        # with open(struct_out, "w") as f:
+        #     f.write("\n".join(struct_lines) + "\n")
+        #     f.write("left hand qpos: \n")
+        #     for i in range(600):
+        #         line = loaded_data['retargeter_results']['left']['hand_qpos'][i]
+        #         f.write(" ".join(str(x) for x in line) + "\n")
+        #     for i in range(600):
+        #         line = loaded_data['retargeter_results']['right']['hand_qpos'][i]
+        #         f.write(" ".join(str(x) for x in line) + "\n")
+        # print(f"Saved structure to {struct_out}")
         demo_data = loaded_data.get('demo_data', {})
         retargeter_results = loaded_data.get('retargeter_results', {})
     print(f"Loaded from {args.load_fname} ({'IK npy' if is_ik else 'physics pt'})")
@@ -253,7 +294,8 @@ def main(args):
     # Collect playback trajectory
     playback_trajectory = {
         'obj_state': [],     # actual object state during playback
-        'demo_state': [],    # ground truth demonstration state
+        'object_demo_state': [],    # ground truth object demonstration state
+        'hand_qpos': {side: [] for side in hand_entities},  # hand joint positions at each step
     }
     
     # Initialize frame collection for video
@@ -287,10 +329,16 @@ def main(args):
             obj_state = np.concatenate([obj.root_pos[0].cpu().numpy(), obj.root_quat[0].cpu().numpy(), obj.dof_pos[0].cpu().numpy()])
             playback_trajectory['obj_state'].append(obj_state)
             
-            # Get demo state at this step (ground truth)
+            # Get object demo state at this step (ground truth)
             demo_state = np.concatenate([obj_pos[step].cpu().numpy(), obj_quat[step].cpu().numpy(), obj_arti[step].cpu().numpy().flatten()])
-            playback_trajectory['demo_state'].append(demo_state)
-            
+            playback_trajectory['object_demo_state'].append(demo_state)
+
+            # Record hand joint positions
+            for side, hand in hand_entities.items():
+                joint_idxs = [joint.dof_idx_local for joint in hand.joints if joint.type in [gs.JOINT_TYPE.REVOLUTE, gs.JOINT_TYPE.PRISMATIC]]
+                qpos = hand.get_dofs_position(joint_idxs)[0].cpu().numpy()
+                playback_trajectory['hand_qpos'][side].append(qpos)
+
             # Print hand z position for first step in range
             if step == start_frame:
                 for side, hand in hand_entities.items():
@@ -361,7 +409,8 @@ def main(args):
     # Save playback trajectory to .npy file
     playback_trajectory = {
         'obj_state': np.array(playback_trajectory['obj_state']),     # shape (T, 8)
-        'demo_state': np.array(playback_trajectory['demo_state']),   # shape (T, 8)
+        'object_demo_state': np.array(playback_trajectory['object_demo_state']),   # shape (T, 8)
+        'hand_qpos': {side: np.array(qpos_list) for side, qpos_list in playback_trajectory['hand_qpos'].items()},  # shape (T, num_dofs) per side
     }
     
     # Create output directory structure: kinematic_playback/{hand_name}/{subject_name}/
@@ -369,11 +418,13 @@ def main(args):
     hand_folder = os.path.join(output_base_dir, args.hand, subject_name)
     os.makedirs(hand_folder, exist_ok=True)
     
-    output_fname = os.path.join(hand_folder, f"playback_{obj_name}_use_{use_clip_str}_{start_frame}_{end_frame}.npy")
-    np.save(output_fname, playback_trajectory)
+    src_tag = "npy" if is_ik else "pt"
+    output_fname = os.path.join(hand_folder, f"playback_{obj_name}_use_{use_clip_str}_{start_frame}_{end_frame}_{src_tag}.pkl")
+    with open(output_fname, "wb") as f:
+        pickle.dump(playback_trajectory, f)
     print(f"\nSaved playback trajectory to {output_fname}")
     print(f"  obj_state shape: {playback_trajectory['obj_state'].shape}")
-    print(f"  demo_state shape: {playback_trajectory['demo_state'].shape}")
+    print(f"  demo_state shape: {playback_trajectory['object_demo_state'].shape}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Playback retargeted hand animation")
