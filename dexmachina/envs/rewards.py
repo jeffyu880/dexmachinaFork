@@ -13,6 +13,7 @@ def get_reward_cfg(last_n_frame=-1):
         "obj_pos_weight": 2.0,
         "obj_rot_weight": 3.0,
         "obj_arti_weight": 5.0,  
+        "no_object": False,
         
         "last_n_frame": last_n_frame,
         "multiply_task_rew": True,
@@ -96,6 +97,7 @@ class RewardModule:
         self.multiply_frame_contact = reward_cfg.get("multiply_frame_contact", True) 
         self.mask_zero_contact = reward_cfg.get("mask_zero_contact", True)
         self.contact_rew_function = reward_cfg.get("contact_rew_function", "exp")
+        self.no_object = reward_cfg.get("no_object", False)
         self.load_demo(demo_data, retarget_data, device) 
 
     def load_demo(self, demo_data, retarget_data, device):
@@ -178,8 +180,10 @@ class RewardModule:
         if obj_pos is None or obj_quat is None or obj_arti is None or self.task_rew_weight == 0.0:
             # dummy reward
             task_rew = torch.zeros(episode_length_buf.shape, device=episode_length_buf.device)
-            return task_rew, dict(task_rew=task_rew)
-
+            # print("using dummy task reward")
+            return task_rew, dict(task_rew=task_rew.clone())
+        # else:
+            # ("Computing task reward")
         demo_arti = self.match_demo_state("obj_arti", episode_length_buf)
         pos_dist = position_distance(obj_pos, demo_pos)
         rot_dist = rotation_distance(obj_quat, demo_quat)
@@ -596,7 +600,7 @@ class RewardModule:
             obj_pos, obj_quat, obj_arti,
             demo_pos, demo_quat,
             episode_length_buf
-        )
+        )    
         if self.bc_rew_weight > 0.0:
             bc_rew = self.bc_rew_weight * torch.exp(-self.cfg["bc_beta"] * bc_dist)
             bc_rew = torch.mean(bc_rew, dim=-1)
@@ -677,7 +681,23 @@ class RewardModule:
         if self.cfg["action_penalty"] > 0.0:
             action_penalty = torch.mean(actions**2, dim=-1) * self.cfg["action_penalty"]
             rew -= action_penalty
-            rew_dict["action_penalty"] = action_penalty  
+            rew_dict["action_penalty"] = action_penalty
+
+        # Debug: print all reward components (only first env)
+        if False:  # Set to True to enable
+            print("\n=== Reward Dict Components ===")
+            for k, v in rew_dict.items():
+                if isinstance(v, torch.Tensor):
+                    if v.numel() == 1:
+                        print(f"  {k}: {v.item():.6f}")
+                    elif len(v.shape) == 1:
+                        print(f"  {k}: shape={v.shape}, first={v[0].item():.6f}")
+                    else:
+                        print(f"  {k}: shape={v.shape}, mean={v.mean().item():.6f}")
+                else:
+                    print(f"  {k}: {v}")
+            print(f"  FINAL REWARD: {rew[0].item():.6f}\n")
+
         return rew, rew_dict
  
     def get_reward_keys(self):

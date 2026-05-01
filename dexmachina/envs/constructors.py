@@ -159,6 +159,7 @@ def get_all_env_cfg(args, device, load_retarget_data=True):
         if args.color_object == 'gray':
             object_cfgs[obj_name]['color'] = (0.5, 0.5, 0.5, 1)
     if args.no_object:
+        reward_cfg['no_object'] = args.no_object
         reward_cfg['task_rew_weight'] = 0.0
         reward_cfg['contact_rew_weight'] = 0.0
         reward_cfg['use_retarget_contact'] = False

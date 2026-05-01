@@ -1,0 +1,7 @@
+File: /home/jeffrey/Documents/Manipulation/Genesis/dexmachina/read_pkl/playback_ketchup_use_01_0_600_npy.pkl
+============================================================
+dict(2 keys)
+  ['obj_state']:
+    ndarray shape=(600, 8) dtype=float32 min=-0.7185 max=2.514
+  ['demo_state']:
+    ndarray shape=(600, 8) dtype=float32 min=-0.6963 max=2.797

@@ -420,7 +420,7 @@ class BaseRobot:
             per_demo_qpos.append(self.residual_qpos.clone())
             per_demo_lengths.append(side_data['num_frames'])
             per_demo_init_qpos.append(self.residual_qpos[0].clone())  # First frame = init position
-            print("First element inside demo_init_qpos: ", self.residual_qpos[0].clone())
+            # print("First element inside demo_init_qpos: ", self.residual_qpos[0].clone())
             per_demo_dof_limits.append(self.dof_limits.clone())     # the limits are the same across the same hand regardless of demo
             
 

@@ -3,8 +3,7 @@
 MAX_ATTEMPTS=20
 RETRY_DELAY=15
 
-CK=/home/jeffrey/Documents/Manipulation/Genesis/dexmachina/izar_logs/rl_games/allegro_hand/ketchup_combined_0426_220343/nn/last_allegro_hand_ep_4500_rew_85.383766.pth
-
+CK=/home/jeffrey/Documents/Manipulation/Genesis/dexmachina/izar_logs/rl_games/allegro_hand/allegro-new_obs0426_183054_ketchup40-140-s02-u01_B11000_hybrid_thres0.5_ho32_imi0.2_con2.0_bc0.2/nn/last_allegro_hand_ep_4510_rew__91.01437_.pth
 for attempt in $(seq 1 $MAX_ATTEMPTS); do
     echo "[Attempt $attempt/$MAX_ATTEMPTS] Running eval script..."
     python dexmachina/rl/eval_rl_games.py \

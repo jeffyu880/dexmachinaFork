@@ -557,7 +557,7 @@ class BaseEnv:
         self.nan_envs = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
         
         # NOTE this must be int dtype for indexing in match_demo_state
-        self.episode_length_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.int32)
+        self.episode_length_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.int32)     # used to track how many steps have elapsed in the current episode for each environment independently
         self.episode_start_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.int32) # this should be demo timestep
 
         if self.chunk_ep_length > 0:
@@ -776,7 +776,8 @@ class BaseEnv:
         task_rewards = rew_dict['task_rew'] # use task_rew for reset
         task_rewards[self.nan_envs] = -1.0
         rew_dict['task_rew'] = task_rewards
-        self.cumulative_task_rew[:] += task_rewards if self.n_objects == 1 else rewards 
+        if not self.no_object:
+            self.cumulative_task_rew[:] += task_rewards if self.n_objects == 1 else rewards 
         
         if 'con_rew' in rew_dict:
             con_rew = rew_dict['con_rew']
@@ -791,7 +792,8 @@ class BaseEnv:
             bc_rew[self.nan_envs] = -1.0
             self.cumulative_bc_rew[:] += bc_rew
         if self.env_demo_idx is not None and hasattr(self, 'per_demo_task_rew'):
-            self.per_demo_task_rew.scatter_add_(0, self.env_demo_idx, task_rewards if self.n_objects == 1 else rewards)
+            if not self.no_object:
+                self.per_demo_task_rew.scatter_add_(0, self.env_demo_idx, task_rewards)
             if 'con_rew' in rew_dict:
                 self.per_demo_con_rew.scatter_add_(0, self.env_demo_idx, con_rew)
             if 'imi_rew' in rew_dict:

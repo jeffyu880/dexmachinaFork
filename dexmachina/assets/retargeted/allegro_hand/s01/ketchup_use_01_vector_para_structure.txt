@@ -1,0 +1,123 @@
+Source: .pt (physics-settled)
+retarget_data: dict   -> post smoothing trajectory
+  left: dict
+    joint_qpos: dict
+      L_forearm_tx_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_ty_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_tz_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_roll_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_pitch_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_yaw_link_joint: Tensor shape=(600,) dtype=torch.float32
+      joint_0.0: Tensor shape=(600,) dtype=torch.float32
+      joint_4.0: Tensor shape=(600,) dtype=torch.float32
+      joint_8.0: Tensor shape=(600,) dtype=torch.float32
+      joint_12.0: Tensor shape=(600,) dtype=torch.float32
+      joint_1.0: Tensor shape=(600,) dtype=torch.float32
+      joint_5.0: Tensor shape=(600,) dtype=torch.float32
+      joint_9.0: Tensor shape=(600,) dtype=torch.float32
+      joint_13.0: Tensor shape=(600,) dtype=torch.float32
+      joint_2.0: Tensor shape=(600,) dtype=torch.float32
+      joint_6.0: Tensor shape=(600,) dtype=torch.float32
+      joint_10.0: Tensor shape=(600,) dtype=torch.float32
+      joint_14.0: Tensor shape=(600,) dtype=torch.float32
+      joint_3.0: Tensor shape=(600,) dtype=torch.float32
+      joint_7.0: Tensor shape=(600,) dtype=torch.float32
+      joint_11.0: Tensor shape=(600,) dtype=torch.float32
+      joint_15.0: Tensor shape=(600,) dtype=torch.float32
+    joint_targets: dict
+      L_forearm_tx_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_ty_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_tz_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_roll_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_pitch_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_yaw_link_joint: Tensor shape=(600,) dtype=torch.float32
+      joint_0.0: Tensor shape=(600,) dtype=torch.float32
+      joint_4.0: Tensor shape=(600,) dtype=torch.float32
+      joint_8.0: Tensor shape=(600,) dtype=torch.float32
+      joint_12.0: Tensor shape=(600,) dtype=torch.float32
+      joint_1.0: Tensor shape=(600,) dtype=torch.float32
+      joint_5.0: Tensor shape=(600,) dtype=torch.float32
+      joint_9.0: Tensor shape=(600,) dtype=torch.float32
+      joint_13.0: Tensor shape=(600,) dtype=torch.float32
+      joint_2.0: Tensor shape=(600,) dtype=torch.float32
+      joint_6.0: Tensor shape=(600,) dtype=torch.float32
+      joint_10.0: Tensor shape=(600,) dtype=torch.float32
+      joint_14.0: Tensor shape=(600,) dtype=torch.float32
+      joint_3.0: Tensor shape=(600,) dtype=torch.float32
+      joint_7.0: Tensor shape=(600,) dtype=torch.float32
+      joint_11.0: Tensor shape=(600,) dtype=torch.float32
+      joint_15.0: Tensor shape=(600,) dtype=torch.float32
+    kpt_pos: Tensor shape=(600, 25, 3) dtype=torch.float32
+    kpt_names: list len=25
+    wrist_pose: Tensor shape=(600, 7) dtype=torch.float32
+    wrist_link_name: str = base_dummy_link
+  right: dict
+    joint_qpos: dict
+      R_forearm_tx_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_ty_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_tz_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_roll_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_pitch_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_yaw_link_joint: Tensor shape=(600,) dtype=torch.float32
+      joint_0.0: Tensor shape=(600,) dtype=torch.float32
+      joint_4.0: Tensor shape=(600,) dtype=torch.float32
+      joint_8.0: Tensor shape=(600,) dtype=torch.float32
+      joint_12.0: Tensor shape=(600,) dtype=torch.float32
+      joint_1.0: Tensor shape=(600,) dtype=torch.float32
+      joint_5.0: Tensor shape=(600,) dtype=torch.float32
+      joint_9.0: Tensor shape=(600,) dtype=torch.float32
+      joint_13.0: Tensor shape=(600,) dtype=torch.float32
+      joint_2.0: Tensor shape=(600,) dtype=torch.float32
+      joint_6.0: Tensor shape=(600,) dtype=torch.float32
+      joint_10.0: Tensor shape=(600,) dtype=torch.float32
+      joint_14.0: Tensor shape=(600,) dtype=torch.float32
+      joint_3.0: Tensor shape=(600,) dtype=torch.float32
+      joint_7.0: Tensor shape=(600,) dtype=torch.float32
+      joint_11.0: Tensor shape=(600,) dtype=torch.float32
+      joint_15.0: Tensor shape=(600,) dtype=torch.float32
+    joint_targets: dict
+      R_forearm_tx_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_ty_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_tz_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_roll_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_pitch_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_yaw_link_joint: Tensor shape=(600,) dtype=torch.float32
+      joint_0.0: Tensor shape=(600,) dtype=torch.float32
+      joint_4.0: Tensor shape=(600,) dtype=torch.float32
+      joint_8.0: Tensor shape=(600,) dtype=torch.float32
+      joint_12.0: Tensor shape=(600,) dtype=torch.float32
+      joint_1.0: Tensor shape=(600,) dtype=torch.float32
+      joint_5.0: Tensor shape=(600,) dtype=torch.float32
+      joint_9.0: Tensor shape=(600,) dtype=torch.float32
+      joint_13.0: Tensor shape=(600,) dtype=torch.float32
+      joint_2.0: Tensor shape=(600,) dtype=torch.float32
+      joint_6.0: Tensor shape=(600,) dtype=torch.float32
+      joint_10.0: Tensor shape=(600,) dtype=torch.float32
+      joint_14.0: Tensor shape=(600,) dtype=torch.float32
+      joint_3.0: Tensor shape=(600,) dtype=torch.float32
+      joint_7.0: Tensor shape=(600,) dtype=torch.float32
+      joint_11.0: Tensor shape=(600,) dtype=torch.float32
+      joint_15.0: Tensor shape=(600,) dtype=torch.float32
+    kpt_pos: Tensor shape=(600, 25, 3) dtype=torch.float32
+    kpt_names: list len=25
+    wrist_pose: Tensor shape=(600, 7) dtype=torch.float32
+    wrist_link_name: str = base_dummy_link
+retargeter_results: dict    # pre-smoothing trajectory
+  left: dict
+    hand_qpos: ndarray shape=(600, 22) dtype=float32
+    wrist_qpos: ndarray shape=(600, 6) dtype=float64
+    wrist_idxs: ndarray shape=(600, 6) dtype=int64
+    actuated_dof_names: list len=22
+    actuated_dof_idxs: list len=22
+  right: dict
+    hand_qpos: ndarray shape=(600, 22) dtype=float32
+    wrist_qpos: ndarray shape=(600, 6) dtype=float64
+    wrist_idxs: ndarray shape=(600, 6) dtype=int64
+    actuated_dof_names: list len=22
+    actuated_dof_idxs: list len=22
+demo_data: dict
+  obj_pos: ndarray shape=(600, 3) dtype=float32
+  obj_quat: ndarray shape=(600, 4) dtype=float32
+  obj_arti: ndarray shape=(600,) dtype=float32
+  contact_links_left: ndarray shape=(600, 16, 4) dtype=float64
+  contact_links_right: ndarray shape=(600, 16, 4) dtype=float64

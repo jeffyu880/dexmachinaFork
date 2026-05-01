@@ -1,0 +1,13 @@
+Source: .npy (pure kinematic IK)
+left: dict
+  hand_qpos: ndarray shape=(600, 22) dtype=float32
+  wrist_qpos: ndarray shape=(600, 6) dtype=float64
+  wrist_idxs: ndarray shape=(600, 6) dtype=int64
+  actuated_dof_names: list len=22
+  actuated_dof_idxs: list len=22
+right: dict
+  hand_qpos: ndarray shape=(600, 22) dtype=float32
+  wrist_qpos: ndarray shape=(600, 6) dtype=float64
+  wrist_idxs: ndarray shape=(600, 6) dtype=int64
+  actuated_dof_names: list len=22
+  actuated_dof_idxs: list len=22
