@@ -173,7 +173,7 @@ class BaseEnv:
         all_retarget_data=None,  # List of all retarget data
         all_demo_names=None,  # List of human-readable demo names for logging
     ):
-        self.no_object = env_cfg["no_object"]
+        self.no_object = env_cfg.get("no_object", False)
         self.env_cfg = env_cfg
         self.reward_cfg = reward_cfg
         self.demo_data = demo_data

@@ -167,32 +167,24 @@ def main(args):
 
     # get path to retargeted demonstration and load demo_data
     assert os.path.exists(args.load_fname), f"load_fname={args.load_fname} does not exist"
-    subject_name = args.load_fname.split("/")[-2]
     hand_name = args.hand if 'hand' in args.hand else f"{args.hand}_hand"
     retarget_type = 'position' if hand_name == 'shadow_hand' else 'vector'
-    
-    # Construct path to saved .pt file from parallel_retarget
-    traj_name = args.load_fname.split("/")[-1].replace(".npy", "")
-    save_fname = f"dexmachina/assets/retargeted/{hand_name}/{subject_name}/{traj_name}_{retarget_type}_para.pt"
-    
-    if os.path.exists(save_fname):
-        loaded_data = torch.load(save_fname, weights_only=False)
+
+    if args.load_fname.endswith(".pt"):
+        loaded_data = torch.load(args.load_fname, weights_only=False)
+        retargeter_results = loaded_data['retargeter_results']
         demo_data = loaded_data.get('demo_data', {})
-        print(f"Loaded demo_data from {save_fname}")
+        print(f"Loaded from .pt: {args.load_fname}")
     else:
-        raise FileNotFoundError(f"Retargeted file not found: {save_fname}. Run parallel_retarget.py first with --save flag.")
-    
+        loaded_data = np.load(args.load_fname, allow_pickle=True).item()
+        retargeter_results = loaded_data.get('retargeter_results', loaded_data)
+        demo_data = loaded_data.get('demo_data', {})
+        print(f"Loaded from .npy: {args.load_fname}")
+
     # create the manipulation scene
     scene, hand_entities, obj, cam = create_scene(args, args.obj_name, urdfs, demo_data)
 
     device = torch.device('cuda:0')
-
-    # Load retargeter results
-    retarget_fname = join(
-        f"dexmachina/assets/retargeter_results/{hand_name}/{subject_name}", 
-        args.load_fname.split("/")[-1].replace(".npy", f"_{retarget_type}.npy")
-    )
-    retargeter_results = np.load(retarget_fname, allow_pickle=True).item()
 
     # Build scene
     scene.build(n_envs=num_envs, env_spacing=(2.0, 2.0))
@@ -342,9 +334,11 @@ def main(args):
         'demo_state': np.array(playback_trajectory['demo_state']),   # shape (T, 8)
     }
     
-    # Extract use_clip number from traj_name (e.g., "ketchup_use_01" -> "01")
-    use_clip = traj_name.split("_use_")[-1] if "_use_" in traj_name else "unknown"
-    
+    # Extract use_clip and subject_name from load_fname
+    load_basename = os.path.splitext(os.path.basename(args.load_fname))[0]
+    use_clip = load_basename.split("_use_")[-1].split("_")[0] if "_use_" in load_basename else "unknown"
+    subject_name = args.load_fname.split("/")[-2]
+
     # Create output directory structure: kinematic_playback/{hand_name}/{subject_name}/
     output_base_dir = "/home/jeffrey/Documents/Manipulation/Genesis/dexmachina/dexmachina/assets/kinematic_playback"
     hand_folder = os.path.join(output_base_dir, args.hand, subject_name)

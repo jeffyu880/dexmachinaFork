@@ -1,0 +1,117 @@
+# Format: object subject:use_numbers
+# Retake-only sequences are excluded (see bottom of file)
+
+box         s01:1,2
+box         s02:1,2
+box         s04:1,2
+box         s05:1,2
+box         s06:1,2,3,4
+box         s07:1,2
+box         s08:1,2,3,4
+box         s10:1,2
+
+# capsulemachine  s01:1,2
+# capsulemachine  s02:1,2
+# capsulemachine  s04:1,2
+# capsulemachine  s05:1,2
+# capsulemachine  s06:1,2
+# capsulemachine  s07:1,2
+# capsulemachine  s08:1,2,3,4
+# capsulemachine  s09:1,2,3,4
+# capsulemachine  s10:1,2
+# 
+# espressomachine s01:1,2
+# espressomachine s02:1,2
+# espressomachine s04:2
+# espressomachine s05:1,2
+# espressomachine s06:1,2,3,4
+# espressomachine s07:1,2
+# espressomachine s08:1,2,3
+# espressomachine s09:1,2,3,4
+# espressomachine s10:2
+
+# ketchup     s01:1,2
+# ketchup     s02:1,2,3,4
+# ketchup     s04:2
+# ketchup     s05:1
+# ketchup     s06:1,2
+# ketchup     s07:2
+# ketchup     s08:1,2,3,4
+# ketchup     s09:1,2,3,4
+# ketchup     s10:1,2
+
+# laptop      s01:1,2,3,4
+# laptop      s02:1,2
+# laptop      s04:1,2
+# laptop      s05:1,2
+# laptop      s07:1,2
+# laptop      s08:1,2,3,4
+# laptop      s09:1,2,3,4
+# laptop      s10:1,2
+# 
+# microwave   s01:1,2
+# microwave   s02:1,2
+# microwave   s04:1,2
+# microwave   s05:1,2
+# microwave   s06:1,2
+# microwave   s07:1,2
+# microwave   s08:1,2,3,4
+# microwave   s09:1,2,3,4
+# 
+# mixer       s01:1,2
+# mixer       s02:1,2,3,4
+# mixer       s04:1,2
+# mixer       s05:1,2
+# mixer       s06:1,2
+# mixer       s07:1
+# mixer       s08:1,2,3,4
+# mixer       s09:1,2,3,4
+# mixer       s10:1,2
+# 
+# notebook    s01:1,2
+# notebook    s02:1,2
+# notebook    s04:1,2
+# notebook    s05:1,2
+# notebook    s06:1,2
+# notebook    s07:1,2
+# notebook    s08:1,2,3,4
+# notebook    s09:1,2,3,4
+# notebook    s10:1,2
+# 
+# phone       s01:1,2
+# phone       s02:1,2
+# phone       s04:1,2
+# phone       s05:1,2,3,4
+# phone       s06:1,2
+# phone       s07:1,2
+# phone       s08:1,2,3,4
+# phone       s09:2,3
+# phone       s10:2
+# 
+# scissors    s01:1,2
+# scissors    s02:1,2
+# scissors    s04:1,2
+# scissors    s05:2
+# scissors    s06:1
+# scissors    s07:1,2
+# scissors    s08:1,3,4
+# scissors    s09:1,2,4
+# scissors    s10:2
+# 
+# waffleiron  s01:1,2
+# waffleiron  s02:1,2
+# waffleiron  s04:1,2
+# waffleiron  s05:1,2
+# waffleiron  s06:1,2,3,4
+# waffleiron  s07:1,2
+# waffleiron  s08:1,2,3,4
+# waffleiron  s09:1,2,3,4
+# waffleiron  s10:1,2
+
+# RETAKE files (excluded above — do not fit padded-number pattern):
+# s02/microwave_use_01_retake.mano.npy
+# s04/espressomachine_use_01_retake.mano.npy
+# s05/scissors_use_01_retake.mano.npy
+# s06/laptop_use_01_retake.mano.npy
+# s06/laptop_use_02_retake.mano.npy
+# s10/phone_use_01_retake.mano.npy

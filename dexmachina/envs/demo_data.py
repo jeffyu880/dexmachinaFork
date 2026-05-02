@@ -8,6 +8,7 @@ from dexmachina.asset_utils import get_asset_path
 
 ARCTIC_PROCESSED_DIR = get_asset_path("arctic/processed")
 RETARGET_DIR = get_asset_path("retargeted")
+IK_RETARGET_DIR=get_asset_path("retargeter_results")
 RETARGET_CONTACT_DIR= get_asset_path("contact_retarget")
 
 def get_demo_data(
@@ -67,6 +68,7 @@ def load_genesis_retarget_data(
     use_clip="01",
     subject_name="s01",
     given_data_fname=None,
+    use_ik_retarget=False,      # use the trajectory coming from the pure IK retargeting instead of the smoothed IK
 ):
     ''' retarget_data is a dict containing a dict for left and right hands
         for each hand there is  init_qpos=init_pos, 
@@ -84,11 +86,13 @@ def load_genesis_retarget_data(
         ret_type = "position"
     if given_data_fname is not None:
         data_fname = given_data_fname
+    elif use_ik_retarget:       # using only the trajectories from the pure IK retargeting
+        data_fname = f"{IK_RETARGET_DIR}/{hand_name}/{subject_name}/{obj_name}_use_{use_clip}_{ret_type}_{save_name}.npy"
     else:
         # ex: retargeted/allegro_hand/s01/ketchup_use_u01_vector_para.npy
         data_fname = f"{RETARGET_DIR}/{hand_name}/{subject_name}/{obj_name}_use_{use_clip}_{ret_type}_{save_name}.npy"
     loaded_tensor = False
-    if not os.path.exists(data_fname):
+    if not os.path.exists(data_fname) and not use_ik_retarget:
         # try .pt extension
         data_fname = data_fname.replace(".npy", ".pt")
         assert os.path.exists(data_fname), f"File {data_fname} not found"

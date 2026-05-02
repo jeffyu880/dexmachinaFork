@@ -23,40 +23,22 @@ ERROR_PATTERNS=(
 for attempt in $(seq 1 $MAX_RETRIES); do
     echo "[Attempt $attempt/$MAX_RETRIES] Running playback script..."
 
-    python examples/playback_kinematic_retargeted_hand.py --obj_name ketchup --record_video --vis --frames 30-130 2>&1
+    python examples/playback_kinematic_retargeted_hand.py \
+    -lf dexmachina/assets/retargeted/allegro_hand/s01/ketchup_use_02_vector_para.pt \
+    --hand allegro_hand \
+    --obj_name ketchup \
+    --vis 2>&1 | tee /tmp/playback_output.log
+    
     EXIT_CODE=$?
 
-    # Check if command succeeded
     if [ $EXIT_CODE -eq 0 ]; then
         echo "✓ Playback completed successfully"
         SUCCESS=true
         break
     fi
 
-    # Check for error patterns in output
-    ERROR_FOUND=false
-    for pattern in "${ERROR_PATTERNS[@]}"; do
-        if grep -qi "$pattern" /tmp/playback_output.log; then
-            echo "✗ Error detected: $pattern"
-            ERROR_FOUND=true
-            break
-        fi
-    done
-
-    if [ "$ERROR_FOUND" = true ] && [ $attempt -lt $MAX_RETRIES ]; then
-        echo "Retrying in 15 seconds..."
-        sleep 15
-        continue
-    elif [ $EXIT_CODE -ne 0 ]; then
-        echo "✗ Script failed with exit code $EXIT_CODE"
-        if [ $attempt -lt $MAX_RETRIES ]; then
-            echo "Retrying..."
-            sleep 15
-        fi
-    else
-        SUCCESS=true
-        break
-    fi
+    echo "✗ Attempt $attempt failed (exit code $EXIT_CODE), retrying in 10 seconds..."
+    sleep 10
 done
 
 if [ "$SUCCESS" = true ]; then

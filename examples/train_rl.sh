@@ -2,7 +2,7 @@
 PARAM_FILE="training_params_$(date +%Y%m%d_%H%M%S).txt"
 
 MAX_ATTEMPTS=20
-RETRY_DELAY=15
+RETRY_DELAY=10
 
 
 for attempt in $(seq 1 $MAX_ATTEMPTS); do

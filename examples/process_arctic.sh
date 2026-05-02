@@ -5,40 +5,34 @@
 
 BASE_PATH="/home/jeffrey/Documents/Manipulation/arctic/outputs/processed_verts/seqs"
 MANO_MODEL_DIR=/home/jeffrey/Documents/Manipulation/ManipTrans/maniptrans_envs/assets/mano_urdf
-
-# Array of demonstrations with their sequences and episode numbers
-demonstrations=(
-    # "s01:2"
-    "s02:3,4"
-    "s04:2"
-    "s05:1"
-    "s06:1,2"
-    "s07:2"
-    "s08:1,2,3,4"
-    "s09:1,2,3,4"
-    "s10:1,2"
-)
+DEMOS_FILE="$(dirname "$0")/demonstrations_by_object.txt"
 
 # Convert to zero-padded format (e.g., 1 -> 01, 2 -> 02)
 pad_number() {
     printf "%02d" $1
 }
 
-# Process each demonstration
-for demo in "${demonstrations[@]}"; do
-    # Split sequence and episodes (e.g., "s01:1,2" -> seq="s01", episodes="1,2")
-    seq="${demo%%:*}"
-    episodes="${demo##*:}"
-    
+# Process each non-comment, non-empty line from demonstrations_by_object.txt
+while IFS= read -r line || [[ -n "$line" ]]; do
+    # Skip comments and blank lines
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "${line// }" ]] && continue
+
+    # Parse: "object  seq:episodes"
+    object=$(echo "$line" | awk '{print $1}')
+    rest=$(echo "$line" | awk '{print $2}')
+    seq="${rest%%:*}"
+    episodes="${rest##*:}"
+
     # Split episodes by comma and process each one
     IFS=',' read -ra ep_array <<< "$episodes"
     for ep in "${ep_array[@]}"; do
         # Remove leading whitespace
         ep=$(echo "$ep" | xargs)
-        
+
         # Construct filename with zero-padded episode number
         padded_ep=$(pad_number "$ep")
-        FNAME="$BASE_PATH/$seq/ketchup_use_$padded_ep.npy"
+        FNAME="$BASE_PATH/$seq/${object}_use_$padded_ep.npy"
         
         # Check if file exists before processing
         if [ ! -f "$FNAME" ]; then
@@ -73,6 +67,6 @@ for demo in "${demonstrations[@]}"; do
             echo "$output"
         fi
     done
-done
+done < "$DEMOS_FILE"
 
 echo "All demonstrations processed."

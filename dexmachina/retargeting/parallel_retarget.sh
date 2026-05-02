@@ -21,15 +21,15 @@ echo "Using hand: $HAND"
 
 # Array of demonstrations with their sequences and user numbers
 demonstrations=(
-    # "s01:2"
-    "s02:1"
-    # "s04:2"
-    # "s05:1"
-    # "s06:1,2"
-    # "s07:2"
-    # "s08:3"
-    # "s09:2"
-    # "s10:1,2"
+    "s01:1,2"
+    "s02:1,2,3,4"
+    "s04:2"
+    "s05:1"
+    "s06:1,2"
+    "s07:2"
+    "s08:1,2,3,4"
+    "s09:1,2,3,4"
+    "s10:1,2"
 )
 
 # Convert to zero-padded format (e.g., 1 -> 01, 2 -> 02)
@@ -69,13 +69,24 @@ for demo in "${demonstrations[@]}"; do
             
             # Stream output live to console and also capture it for success detection.
             tmp_output=$(mktemp)
+
+            # for retargeting
             python retargeting/parallel_retarget.py \
                 --clip "$CLIP" \
                 --hand "$HAND" \
                 --control_steps "$CONTROL_STEPS" \
                 --save_name "$SAVE_NAME" \
                 --save \
+                --no_smoothing \
                 -ow 2>&1 | tee "$tmp_output"
+
+            # for visualization of kinematic retargeting
+            # python retargeting/parallel_retarget.py \
+            #     --clip ketchup-0-600-s01-u02 \
+            #     --hand allegro_hand \
+            #     --replay_only \
+            #     --no_smoothing \
+            #     --vis 2>&1 | tee "$tmp_output"
             cmd_status=${PIPESTATUS[0]}
             output=$(cat "$tmp_output")
             rm -f "$tmp_output"
@@ -83,13 +94,13 @@ for demo in "${demonstrations[@]}"; do
             if [ $cmd_status -ne 0 ]; then
                 echo "Python command exited with status: $cmd_status"
             fi
-            
-            if echo "$output" | grep -q "Saved data to"; then
+
+            if [ $cmd_status -eq 0 ]; then
                 echo "✓ Completed: $CLIP"
                 success=true
                 break
             else
-                echo "✗ Attempt $attempt failed: \"Saved data to\" not found"
+                echo "✗ Attempt $attempt failed (exit code $cmd_status)"
                 if [ $attempt -lt $max_attempts ]; then
                     echo "Waiting 10 seconds before retry..."
                     sleep 10

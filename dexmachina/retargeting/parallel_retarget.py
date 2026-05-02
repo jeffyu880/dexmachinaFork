@@ -338,11 +338,18 @@ def main(args):
     kwargs = prepare_cfgs(
         args, hand_name, obj_name, start, end, subject_name, use_clip
         )
-    retargeters, world_data, input_fname  = prepare_retarget_cfgs(
-        args, hand_name, obj_name, kwargs['robot_cfgs'], subject_name, use_clip)
     retarget_type = args.retarget_type if 'shadow' not in hand_name else 'position'
+    if args.replay_only:
+        input_fname = join(PROCESSED_DATADIR, f"{subject_name}/{obj_name}_use_{use_clip}.npy")
+        world_data = None
+        retargeters = None
+    else:
+        retargeters, world_data, input_fname = prepare_retarget_cfgs(
+            args, hand_name, obj_name, kwargs['robot_cfgs'], subject_name, use_clip)
 
     assert not (args.replay_only and args.save), "Cannot save and replay at the same time" 
+    if args.no_smoothing:
+        retarget_type = retarget_type + "_pure_ik"
     save_fname = get_save_fname(args, hand_name, input_fname, retarget_type, subject_name)
     retargeter_save_fname = get_retargeter_save_fname(args, hand_name, input_fname, retarget_type, subject_name)
     if not args.overwrite and os.path.exists(save_fname) and not args.save_retargeter_only and not args.replay_only:
@@ -415,48 +422,58 @@ def main(args):
         render_frames.append(img)
         
     
-    # for each env idx, set the initial object pose to the demo step 
-    iters = 0
-    controlled_steps = {side: torch.zeros(num_envs, device=device) for side in ['left', 'right']}
-    for i in range(args.control_steps):
-        # Print hand z position for first step
-        if i == 0:
-            for side, hand in hands.items():
-                hand_pos = hand.entity.get_links_pos()[0, hand.wrist_link_idx, :]  # Get wrist position (x, y, z)
-                print(f"[Step {i}] {side.capitalize()} hand wrist z position: {hand_pos[2]:.4f}")
-        
-        set_init_object_states(obj, obj_pos, obj_quat, obj_arti, joint_only=True)
-        for side in ['left', 'right']:
-            hand = hands[side] 
-            actions = hand_actions[side]
-            hand.step(actions) 
+    if args.no_smoothing:
+        # Set each env directly to its kinematic target, run one FK step, capture — no control loop needed
+        for side, hand in hands.items():
+            hand.set_joint_position(hand_qposes[side])
         scene.step()
         for side, hand in hands.items():
-            hand.update_value_buffers()
-            # print(f"Side: {side} | control_errs: {hand.get_control_errors().sum() }")
-            c_steps = controlled_steps[side] 
-            c_steps += 1 
-            hand_qpos = hand_qposes[side] 
-            new_c_steps = resample_hand_qpos(
-                hand, 
-                hand_qpos, 
-                c_steps, 
-                min_controlled_steps=(20 if args.render_image else 90),
-                resample_range=([10,80] if args.render_image  else [20, 60]), 
-                error_threshold=(0.001 if args.render_image else 0.05),
-                )
-            controlled_steps[side] = new_c_steps
-        if args.render_image:
-            img, _, _, _ = cam.render()
-            # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            frame_name = f"retargeting/frames/rendered_{i}.png"
-            if args.raytrace:
-                print(f"Rendering raytrace image step {i}\n")
-                cv2.imwrite(frame_name, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-            render_frames.append(img)
-        if i == args.control_steps - 1:
+            hand.collect_data_step(collect_all_envs=True)
+            
+        print("Saving direct IK playback as hand trajectory")
+    else:
+        # for each env idx, set the initial object pose to the demo step
+        iters = 0
+        controlled_steps = {side: torch.zeros(num_envs, device=device) for side in ['left', 'right']}
+        for i in range(args.control_steps):
+        # Print hand z position for first step
+            if i == 0:
+                for side, hand in hands.items():
+                    hand_pos = hand.entity.get_links_pos()[0, hand.wrist_link_idx, :]  # Get wrist position (x, y, z)
+                    print(f"[Step {i}] {side.capitalize()} hand wrist z position: {hand_pos[2]:.4f}")
+            
+            set_init_object_states(obj, obj_pos, obj_quat, obj_arti, joint_only=True)
+            for side in ['left', 'right']:
+                hand = hands[side] 
+                actions = hand_actions[side]
+                hand.step(actions) 
+            scene.step()
             for side, hand in hands.items():
-                hand.collect_data_step(collect_all_envs=True)
+                hand.update_value_buffers()
+                # print(f"Side: {side} | control_errs: {hand.get_control_errors().sum() }")
+                c_steps = controlled_steps[side] 
+                c_steps += 1 
+                hand_qpos = hand_qposes[side]
+                new_c_steps = resample_hand_qpos(
+                    hand,
+                    hand_qpos,
+                    c_steps,
+                    min_controlled_steps=(20 if args.render_image else 90),
+                    resample_range=([10,80] if args.render_image  else [20, 60]),
+                    error_threshold=(0.001 if args.render_image else 0.05),
+                    )
+                controlled_steps[side] = new_c_steps
+            if args.render_image:
+                img, _, _, _ = cam.render()
+                # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                frame_name = f"retargeting/frames/rendered_{i}.png"
+                if args.raytrace:
+                    print(f"Rendering raytrace image step {i}\n")
+                    cv2.imwrite(frame_name, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+                render_frames.append(img)
+            if i == args.control_steps - 1:
+                for side, hand in hands.items():
+                    hand.collect_data_step(collect_all_envs=True)       # gets hand information for a dataset
     if args.render_image:
         import cv2
         vfname = "retargeting/rendered_video.mp4"
@@ -509,5 +526,6 @@ if __name__ == '__main__':
     parser.add_argument("--render_image", action="store_true", default=False, help="Render image for visualization") 
     parser.add_argument("--enable_self_collision", "-sc", action="store_true", default=False, help="Enable self collision")
     parser.add_argument("--save_retargeter_only", "-sro", action="store_true", default=False, help="Save only retargeter results")
+    parser.add_argument("--no_smoothing", action="store_true", default=False, help="Skip resampling (saves pure playback without smoothing)")
     args = parser.parse_args() 
     main(args)

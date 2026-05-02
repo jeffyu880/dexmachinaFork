@@ -74,6 +74,7 @@ def get_all_env_cfg(args, device, load_retarget_data=True):
                 save_name=args.retarget_name,
                 use_clip=use_clip,
                 subject_name=subject,
+                use_ik_retarget=True
             ) 
         demo_data = get_demo_data(
             obj_name=args.arctic_object,

@@ -485,6 +485,7 @@ def main():
     parser.add_argument('--print_rew', '-pr', action='store_true')
     parser.add_argument('--show_reference', '-ref', action='store_true') # if not ture, don't show the retargeted reference
     parser.add_argument('--reference_clip', '-ref_clip', type=str, default=None, help='Alternative demonstration clip to use as reference trajectory (e.g., "box-0-100")')
+    parser.add_argument('--retarget_name', '-rn', type=str, default='para', help='Retarget save name to load (e.g. "para", "pure_ik_para")')
     parser.add_argument('--output_render', '-or', action='store_true') # if not ture, don't show the retargeted reference
     parser.add_argument('--render_dir', '-out', type=str, default="rendered") # if not provided, save in the same folder as the checkpoint
     parser.add_argument('--video_fname', '-of', type=str, default="-eval.mp4") # if not provided, save in the same folder as the checkpoint
@@ -633,7 +634,7 @@ def main():
             hand_name=checkpoint_hand,
             frame_start=start,
             frame_end=end,
-            save_name="para",  # Match the training retarget variant
+            save_name=args.retarget_name,
             use_clip=use_clip,
             subject_name=subject_name,
         )
@@ -774,7 +775,8 @@ def main():
         
         npy_base = args.npy_name if args.npy_name is not None else (demo_tag if demo_tag is not None else "eval")
         ckpt_eval_fname = os.path.join(ckpt_data_folder, f"{npy_base}")
-        np.save(os.path.join(ckpt_eval_fname, ".npy"), eval_data)
+        os.makedirs(ckpt_data_folder, exist_ok=True)
+        np.save(ckpt_eval_fname + ".npy", eval_data)
         print(f"Saved eval data to {ckpt_eval_fname}")
         # try loading the data
         # eval_data = np.load(ckpt_eval_fname, allow_pickle=True).item()
