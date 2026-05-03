@@ -26,8 +26,8 @@ PARAM_FILE="training_params_multi_demo_$(date +%Y%m%d_%H%M%S).txt"
 
 # Define parameters once as associative arrays
 declare -A PARAMS=(
-    [batch_size]="-B 10"      #  the # num_envs
-    [epochs]="-obf -obt --max_epochs 40"
+    [batch_size]="-B 10000"      #  the # num_envs
+    [epochs]="-obf -obt --max_epochs 20"
     [object]="--actuate_object --retarget_name para --horizon 32"
     [learning]="-imw 0.5 --learning_rate 0.0001"
     [curriculum]="--gain_mode all --curr_schedule uniform --wait_epochs 200 --num_zero_epoch 500"
@@ -43,6 +43,7 @@ declare -A PARAMS=(
     [seed]="--seed 24"
     [no_object]="-no_obj"
     [randomization]="--rand_init_ratio 0.5"
+    [retarget]='--use_ik_retarget'
     # [sampling]="--demo_sampling deterministic"
     # [randomization]="-rand_obs"         # rand_obs is randomizing observations into the robot and object policy
     # [checkpoint]="--checkpoint /path/to/your/checkpoint.pth"
@@ -66,10 +67,10 @@ declare -A PARAMS=(
 # )
 
 DEMOS=(
-    "ketchup-0-500-s01-u01"
-    "ketchup-0-500-s01-u02"
-    "ketchup-0-500-s04-u02"
-    "ketchup-0-500-s05-u01"
+    "ketchup-0-200-s01-u01"
+    # "ketchup-0-500-s01-u02"
+    # "ketchup-0-500-s04-u02"
+    # "ketchup-0-500-s05-u01"
     # "ketchup-0-500-s06-u01"
     # "ketchup-0-500-s06-u02"
     # "ketchup-0-500-s07-u02"
@@ -87,7 +88,7 @@ DEMOS=(
 # Build the training command once so we can log and execute the exact same args.
 CMD=(
     python dexmachina/rl/train_rl_multi_demo.py
-    --vis
+    # --vis
     ${PARAMS[batch_size]} ${PARAMS[epochs]}
     ${PARAMS[object]}
     ${PARAMS[learning]}
@@ -105,6 +106,7 @@ CMD=(
     ${PARAMS[sampling]}
     ${PARAMS[randomization]}
     ${PARAMS[no_object]}
+    ${PARAMS[retarget]}
     --clips "${DEMOS[@]}"
     # ${PARAMS[checkpoint]}
 )
@@ -175,7 +177,7 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
         break
     else
         if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-            WAIT_TIME=15
+            WAIT_TIME=10
             echo "❌ Retrying in ${WAIT_TIME}s... (Attempt $RETRY_COUNT/$MAX_RETRIES)"
             echo "=========================================="
             echo ""

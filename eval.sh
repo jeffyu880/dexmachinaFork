@@ -19,7 +19,7 @@ for attempt in $(seq 1 $MAX_ATTEMPTS); do
         --camera_angle isometric \
         --record_video \
         -di 1 \
-        --retarget_name pure_ik_para
+        --retarget_type pure_ik_para
         # --reference_clip ketchup-30-130-s01-u01 \
         # --hand allegro_hand
     

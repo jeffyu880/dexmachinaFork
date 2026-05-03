@@ -485,7 +485,7 @@ def main():
     parser.add_argument('--print_rew', '-pr', action='store_true')
     parser.add_argument('--show_reference', '-ref', action='store_true') # if not ture, don't show the retargeted reference
     parser.add_argument('--reference_clip', '-ref_clip', type=str, default=None, help='Alternative demonstration clip to use as reference trajectory (e.g., "box-0-100")')
-    parser.add_argument('--retarget_name', '-rn', type=str, default='para', help='Retarget save name to load (e.g. "para", "pure_ik_para")')
+    parser.add_argument('--retarget_type', '-rt', type=str, default='para', help='Retarget save name to load (e.g. "para", "pure_ik_para")')
     parser.add_argument('--output_render', '-or', action='store_true') # if not ture, don't show the retargeted reference
     parser.add_argument('--render_dir', '-out', type=str, default="rendered") # if not provided, save in the same folder as the checkpoint
     parser.add_argument('--video_fname', '-of', type=str, default="-eval.mp4") # if not provided, save in the same folder as the checkpoint
@@ -634,7 +634,7 @@ def main():
             hand_name=checkpoint_hand,
             frame_start=start,
             frame_end=end,
-            save_name=args.retarget_name,
+            save_name=args.retarget_type,
             use_clip=use_clip,
             subject_name=subject_name,
         )

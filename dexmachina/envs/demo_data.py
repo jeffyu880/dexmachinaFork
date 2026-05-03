@@ -87,12 +87,14 @@ def load_genesis_retarget_data(
     if given_data_fname is not None:
         data_fname = given_data_fname
     elif use_ik_retarget:       # using only the trajectories from the pure IK retargeting
-        data_fname = f"{IK_RETARGET_DIR}/{hand_name}/{subject_name}/{obj_name}_use_{use_clip}_{ret_type}_{save_name}.npy"
+        data_fname = f"{RETARGET_DIR}/{hand_name}/{subject_name}/{obj_name}_use_{use_clip}_{ret_type}_pure_ik_{save_name}.npy"
     else:
         # ex: retargeted/allegro_hand/s01/ketchup_use_u01_vector_para.npy
         data_fname = f"{RETARGET_DIR}/{hand_name}/{subject_name}/{obj_name}_use_{use_clip}_{ret_type}_{save_name}.npy"
     loaded_tensor = False
-    if not os.path.exists(data_fname) and not use_ik_retarget:
+    
+    print(f"using the file name {data_fname}")
+    if not os.path.exists(data_fname):
         # try .pt extension
         data_fname = data_fname.replace(".npy", ".pt")
         assert os.path.exists(data_fname), f"File {data_fname} not found"

@@ -74,7 +74,7 @@ def get_all_env_cfg(args, device, load_retarget_data=True):
                 save_name=args.retarget_name,
                 use_clip=use_clip,
                 subject_name=subject,
-                use_ik_retarget=True
+                use_ik_retarget=args.use_ik_retarget            # pass in as arg
             ) 
         demo_data = get_demo_data(
             obj_name=args.arctic_object,
@@ -286,7 +286,7 @@ def get_common_argparser():
     parser.add_argument('--raytrace', '-ray', action='store_true')
     parser.add_argument('--record_interval', '-ri', type=int, default=-1)
     parser.add_argument('--use_teleop', action='store_true') 
-    parser.add_argument('--retarget_name', '-rn', type=str, default='genesis')
+    parser.add_argument('--retarget_name', '-rn', type=str, default='')
     parser.add_argument('--teleop_fname', type=str, default='data/scripted/tmp_box/tmp_box.npz')
     parser.add_argument('--observe_tip_dist', '-obt', action='store_true')
     parser.add_argument('--observe_contact_force', '-obf', action='store_true')
@@ -368,7 +368,9 @@ def get_common_argparser():
 
     parser.add_argument('--dialback_ep_len', type=int, default=30)
     parser.add_argument('--dialback_min_epochs', type=int, default=500)
-    parser.add_argument('--dialback_ratios', type=float, nargs='+', default=[0.98, 1.0, 1.0])
+    parser.add_argument('--dialback_ratios', type=float, nargs='+', default=[0.98, 1.0, 1.0])\
+        
+    parser.add_argument('--use_ik_retarget', action='store_true', help='Use only IK retargeting')
 
     # additional arguments for maniptrans
     parser.add_argument('--maniptrans', '-mpt', action='store_true')

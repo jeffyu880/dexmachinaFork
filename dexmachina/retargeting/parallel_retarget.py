@@ -189,6 +189,11 @@ def prepare_cfgs(args, hand_name, obj_name, start, end, subject_name, use_clip):
     return kwargs 
 
 def prepare_retarget_cfgs(args, hand_name, obj_name, robot_cfgs, subject_name="s01", use_clip="01"):
+    # Builds left/right retargeters from the hand's YAML config and loads the
+    # corresponding MANO world-coordinate demo trajectory from disk.
+    # Validates that each retargeter and robot_cfg agree on URDF path and wrist
+    # link name so retargeting keypoints map to the correct simulation links.
+    # Returns (retargeters dict, world_data array, input_fname path).
     if 'mano' in hand_name:
         config_path = "assets/mano_hand/retarget_config.yaml"
         robot_dir = "mano-urdf"
