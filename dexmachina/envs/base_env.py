@@ -675,7 +675,12 @@ class BaseEnv:
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
             # only log cum. episode reward if that env_idx is DONE
-            rew_dict['episode_rew'] = self.cumulative_task_rew[reset_env_ids]
+            rew_dict['episode_rew'] = (
+                self.cumulative_task_rew[reset_env_ids]
+                + self.cumulative_con_rew[reset_env_ids]
+                + self.cumulative_imi_rew[reset_env_ids]
+                + self.cumulative_bc_rew[reset_env_ids]
+            )
             self.steps_since_reset = 0
             self.reset_idx(reset_env_ids)  # rew and obs will be resetted
 
