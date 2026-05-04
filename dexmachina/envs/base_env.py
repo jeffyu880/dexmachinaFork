@@ -208,7 +208,7 @@ class BaseEnv:
         self.max_video_frames = env_cfg['max_video_frames']
         self.record_video = env_cfg['record_video']
         self.render_segmentation = env_cfg.get('render_segmentation', False)
-        self.max_episode_length = int(env_cfg['episode_length'])
+        self.max_episode_length = int(env_cfg['episode_length'])        # length of the demo clip
         self.chunk_ep_length = env_cfg['chunk_ep_length']
         if self.chunk_ep_length > 0:
             print("Chunking episode length to ", self.chunk_ep_length)
@@ -219,6 +219,8 @@ class BaseEnv:
         self.obs_clip = env_cfg['obs_clip']
         self.dt = env_cfg['dt'] 
         self.early_reset_threshold = env_cfg['early_reset_threshold']
+        if self.no_object:
+            self.early_reset_threshold = 0
         self.early_reset_interval = int(env_cfg['early_reset_interval']) 
         self.early_reset_aux_thres = env_cfg.get('early_reset_aux_thres', dict())
         # if true, return obs dict insteaf of obs
@@ -695,7 +697,8 @@ class BaseEnv:
             self.per_demo_imi_rew.zero_()
             self.per_demo_bc_rew.zero_()
 
-        self.extras["log"].update(rew_dict) 
+        self.extras["log"].update(rew_dict)
+        self.extras["log"]["no_object"] = self.no_object
         if self.use_curriculum:
             rew_grads = self.curriculum.get_reward_grads()
             self.extras["log"].update(

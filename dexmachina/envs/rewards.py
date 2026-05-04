@@ -613,7 +613,7 @@ class RewardModule:
                 wrist_pose_left, wrist_pose_right,
                 kpts_left, kpts_right, episode_length_buf
             )
-            if "well_track" in rew_dict and self.mask_well_track:
+            if "well_track" in rew_dict and self.mask_well_track:           # when the object is tracking very well, zero out the imitation reward for those enviornments (default is false)
                 # use well_track to mask out the imitation reward
                 imi_rew = torch.where(rew_dict["well_track"], torch.zeros_like(imi_rew), imi_rew)
             # rew += imi_rew
@@ -643,7 +643,7 @@ class RewardModule:
                     right_reshaped, right_valid,
                     episode_length_buf
                 )
-            if "well_track" in rew_dict and self.mask_well_track:
+            if "well_track" in rew_dict and self.mask_well_track:       # remove contact reward if object pose is well tracked
                 # use well_track to mask out the contact reward
                 contact_rew = torch.where(rew_dict["well_track"], torch.zeros_like(contact_rew), contact_rew)   
   

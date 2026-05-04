@@ -234,6 +234,7 @@ def main():
         agent_cfg["params"]["config"]["mini_epochs"] = max(1, int(args.num_envs / 4096 * 5))    
     agent_cfg["params"]["config"]["num_steps_per_env"] = args.horizon
     agent_cfg["params"]["config"]["learning_rate"] = args.learning_rate
+    agent_cfg["params"]["config"]["early_stop_reward_threshold"] = 0 if env_kwargs['env_cfg'].get('no_object', False) else 35
         
     env_save_kwargs = env_kwargs.copy()
     # pop the demo data and retargeted data (too large to save)

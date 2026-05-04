@@ -26,7 +26,7 @@ PARAM_FILE="training_params_multi_demo_$(date +%Y%m%d_%H%M%S).txt"
 
 # Define parameters once as associative arrays
 declare -A PARAMS=(
-    [batch_size]="-B 10000"      #  the # num_envs
+    [batch_size]="-B 10"      #  the # num_envs
     [epochs]="-obf -obt --max_epochs 20"
     [object]="--actuate_object --retarget_name para --horizon 32"
     [learning]="-imw 0.5 --learning_rate 0.0001"
