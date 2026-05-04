@@ -219,8 +219,6 @@ class BaseEnv:
         self.obs_clip = env_cfg['obs_clip']
         self.dt = env_cfg['dt'] 
         self.early_reset_threshold = env_cfg['early_reset_threshold']
-        if self.no_object:
-            self.early_reset_threshold = 0
         self.early_reset_interval = int(env_cfg['early_reset_interval']) 
         self.early_reset_aux_thres = env_cfg.get('early_reset_aux_thres', dict())
         # if true, return obs dict insteaf of obs

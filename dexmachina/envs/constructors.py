@@ -172,6 +172,8 @@ def get_all_env_cfg(args, device, load_retarget_data=True):
         args.curr_rew_thres[0] = 0.0  # task threshold
         args.curr_rew_thres[1] = 0.0  # contact threshold
         env_cfg['early_reset_threshold'] = 0.0
+        env_cfg['early_reset_aux_thres']['con'] = 0.0       # sets the contact early reset threshold to 0
+
 
     assert len(args.upper_ratios) == len(args.lower_ratios) == 3, "Upper and lower ratios should have length 3"
     ups = list(args.upper_ratios)
