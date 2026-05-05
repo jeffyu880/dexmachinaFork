@@ -18,7 +18,7 @@ TABLE_HEIGHT = 0.6
 OBJ_DEFAULT_POS = (0.0597, -0.2476,  1.0354)
 OBJ_DEFAULT_ROT = (-0.6413,  0.2875,  0.6467, -0.2964)
 CARDBOARD_POS = (0, -0.08, 0.90) 
-CAMERA_RES=(160, 160)
+CAMERA_RES=(1080, 1080)
 ENV_SPACING=(1.0, 1.0)
 
 
@@ -103,7 +103,7 @@ def get_env_cfg(
         )
     camera_kwargs = dict(
         front=dict(
-            res=(160, 160),
+            res=(CAMERA_RES[0], CAMERA_RES[1]),
             # pos=(0.5, -1.5, 1.2),
             # lookat=(0.0, -0.15, 1.0),
             pos=( 0, -1.6,  2.2),
@@ -111,7 +111,7 @@ def get_env_cfg(
             fov=30,
         ),
         back=dict(
-            res=(160, 160),
+            res=(CAMERA_RES[0], CAMERA_RES[1]),
             pos=(0.4, 1.5, 1.8),
             lookat=(0.0, -0.15, 1.0),
             fov=25,
@@ -1321,8 +1321,6 @@ class BaseEnv:
             cam_pos = kwargs.get('pos', (0.0, -1.5, 1.2))
             lookat = kwargs.get('lookat', CARDBOARD_POS)
             res = kwargs.get('res', CAMERA_RES)
-            if self.num_envs < 3:
-                res = (500, 500)
             fov = kwargs.get('fov', 30)
             if 'renderer' in self.scene_cfg: # ray tracing cam
                 res = kwargs.get('raytrace_res', (1024, 1024))

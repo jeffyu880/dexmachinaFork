@@ -256,7 +256,14 @@ def gather_object_state_tensor(demo_data):
     arr = np.concatenate([obj_pos, obj_quat, obj_arti], axis=1)
     return torch.tensor(arr).float()
 
-def eval_one_episode(env, agent, obj_state_tensor, print_rew=False, record_video=False, show_reference=False, save_traj=False):
+def eval_one_episode(env, 
+                     agent,
+                     obj_state_tensor,
+                     print_rew=False,
+                     record_video=False,
+                     show_reference=False,
+                     save_traj=False,
+                     no_object=False):
     obs = env.reset() 
     
     # print("Obs: ", obs)
@@ -277,13 +284,13 @@ def eval_one_episode(env, agent, obj_state_tensor, print_rew=False, record_video
         uenv.max_video_frames = int(uenv.max_episode_length)
         max_frames = uenv.max_video_frames   
     
-    obj = None
+    assert no_object is True, "There is no object in the environment"
     if len(uenv.objects) > 0:
         obj = uenv.objects[uenv.object_names[0]]
         if obj.actuated:
             print("Setting eval time obj gains to 0.0")
             obj.set_joint_gains(0.0, 0.0, force_range=0.0)
-    assert obj is not None, "No object found in the environment"
+
     left_hand = uenv.robots["left"]
     right_hand = uenv.robots["right"]
     joint_target_left = left_hand.residual_qpos
@@ -295,7 +302,8 @@ def eval_one_episode(env, agent, obj_state_tensor, print_rew=False, record_video
             env_step = uenv.episode_length_buf.cpu().numpy()[0]
             # get actions from the agent
             actions = agent.get_action(obs, is_deterministic=True) 
-            demo_state = obj_state_tensor[env_step]
+            if not no_object:
+                demo_state = obj_state_tensor[env_step]
                     
             if show_reference: # visualize the demo traj and set zero action
                 if num_envs < 2:
@@ -303,23 +311,29 @@ def eval_one_episode(env, agent, obj_state_tensor, print_rew=False, record_video
                     print("Re-run with --num_envs 2")
                     show_reference = False
                 else:
-                    obj.set_object_state(
-                        root_pos=demo_state[:3][None],
-                        root_quat=demo_state[3:7][None],
-                        joint_qpos=demo_state[7:][None],
-                        env_idxs=torch.tensor([1], dtype=torch.int32, device=device),
-                    )
-                    actions[-1, :] = -1.0 
+                    if not no_object:
+                        obj.set_object_state(
+                            root_pos=demo_state[:3][None],
+                            root_quat=demo_state[3:7][None],
+                            joint_qpos=demo_state[7:][None],
+                            env_idxs=torch.tensor([1], dtype=torch.int32, device=device),
+                        )
+                    actions[-1, :] = -1.0
                     for robot, joints in zip([left_hand, right_hand], [joint_target_left, joint_target_right]):
                         robot.set_joint_position(
                             joint_targets=joints[env_step][None],
                             env_idxs=[1],
-                        ) 
-            obs, rew, dones, infos = env.step(actions) 
-            obj_pos, obj_quat, obj_arti = obj.root_pos, obj.root_quat, obj.dof_pos
-            obj_state = torch.cat([obj_pos, obj_quat, obj_arti], dim=-1)
-            eval_data["obj_state"].append(obj_state.cpu().numpy())
-            eval_data["demo_state"].append(demo_state.cpu().numpy())
+                        )
+            obs, rew, dones, infos = env.step(actions)
+            if not no_object:
+                obj_pos, obj_quat, obj_arti = obj.root_pos, obj.root_quat, obj.dof_pos
+                obj_state = torch.cat([obj_pos, obj_quat, obj_arti], dim=-1)
+                eval_data["obj_state"].append(obj_state.cpu().numpy())
+                eval_data["demo_state"].append(demo_state.cpu().numpy())
+                # collect object observations
+                obj_obs = obj.get_observations()
+                for key, val in obj_obs.items():
+                    eval_data[f"obj_{key}"].append(val.cpu().numpy() if hasattr(val, 'cpu') else val)
 
             # Collect robot observations
             left_hand_obs = left_hand.get_observations()
@@ -328,20 +342,16 @@ def eval_one_episode(env, agent, obj_state_tensor, print_rew=False, record_video
                 eval_data[f"left_hand_{key}"].append(val.cpu().numpy() if hasattr(val, 'cpu') else val)
             for key, val in right_hand_obs.items():
                 eval_data[f"right_hand_{key}"].append(val.cpu().numpy() if hasattr(val, 'cpu') else val)
-            
-            # Collect object observations
-            obj_obs = obj.get_observations()
-            for key, val in obj_obs.items():
-                eval_data[f"obj_{key}"].append(val.cpu().numpy() if hasattr(val, 'cpu') else val)
 
             if env_step == 0:
                 print(f"\n========== EVAL DEBUG STEP 0 ==========")
                 print(f"obs shape: {obs.shape}, min: {obs.min():.3f}, max: {obs.max():.3f}")
                 print(f"actions shape: {actions.shape}, min: {actions.min():.3f}, max: {actions.max():.3f}")
-                print(f"obj_pos (sim):  {obj_pos[0].cpu().numpy().round(3)}")
-                print(f"obj_pos (demo): {demo_state[:3].cpu().numpy().round(3)}")
-                print(f"obj_quat (sim):  {obj_quat[0].cpu().numpy().round(3)}")
-                print(f"obj_quat (demo): {demo_state[3:7].cpu().numpy().round(3)}")
+                if not no_object:
+                    print(f"obj_pos (sim):  {obj_pos[0].cpu().numpy().round(3)}")
+                    print(f"obj_pos (demo): {demo_state[:3].cpu().numpy().round(3)}")
+                    print(f"obj_quat (sim):  {obj_quat[0].cpu().numpy().round(3)}")
+                    print(f"obj_quat (demo): {demo_state[3:7].cpu().numpy().round(3)}")
                 print(f"left  residual_qpos shape: {joint_target_left.shape}, step0: {joint_target_left[0].cpu().numpy().round(3)}")
                 print(f"right residual_qpos shape: {joint_target_right.shape}, step0: {joint_target_right[0].cpu().numpy().round(3)}")
                 print(f"left  curr_targets[0]: {left_hand.curr_targets[0].cpu().numpy().round(3)}")
@@ -535,6 +545,7 @@ def main():
     # Remap server paths to local paths
     print("[INFO] Remapping server paths to local paths...")
     env_kwargs = remap_paths_in_config(env_kwargs, server_username='jsyu')
+    env_kwargs = remap_paths_in_config(env_kwargs, server_username='students/Jeffrey')
     
     assert env_kwargs['env_cfg']['use_rl_games'], "The saved environment is not from rl-games"
 
@@ -647,7 +658,7 @@ def main():
         env_kwargs['retarget_data'] = ref_retarget_data
     else:
         print(f"[INFO] Using training clip reference trajectory")
-            
+    
     device = torch.device('cuda:0')
     import genesis as gs
     gs.init(backend=gs.gpu, logging_level='warning')
@@ -676,19 +687,23 @@ def main():
     # else:
 
     # Extract object name from object_cfgs (it's the key in the dictionary)
-    obj_name = list(env_kwargs['object_cfgs'].keys())[0]
-    assert obj_name is not None, "ERROR: obj_name not found in object_cfgs. Object was not saved correctly in the environment!"
-    
-    print(f"[INFO] Loading object: {obj_name}")
-    # Print the saved object position from training config
-    obj_init_pos = env_kwargs['object_cfgs'][obj_name]['base_init_pos']
-    obj_init_quat = env_kwargs['object_cfgs'][obj_name]['base_init_quat']
-    print(f"[INFO] Saved ketchup init position: {obj_init_pos}")
-    print(f"[INFO] Saved ketchup init quaternion: {obj_init_quat}")
-    # Load object mesh for ADD metric
-    object_models = load_object_model_for_evaluation(obj_name)
-    obj_state_tensor = gather_object_state_tensor(env_kwargs['demo_data'])
+    no_object = env.no_object
+    if not no_object:
+        obj_name = list(env_kwargs['object_cfgs'].keys())[0]
+        assert obj_name is not None, "ERROR: obj_name not found in object_cfgs. Object was not saved correctly in the environment!"
+        
+        print(f"[INFO] Loading object: {obj_name}")
+        # Print the saved object position from training config
+        obj_init_pos = env_kwargs['object_cfgs'][obj_name]['base_init_pos']
+        obj_init_quat = env_kwargs['object_cfgs'][obj_name]['base_init_quat']
+        print(f"[INFO] Saved ketchup init position: {obj_init_pos}")
+        print(f"[INFO] Saved ketchup init quaternion: {obj_init_quat}")
+        # Load object mesh for ADD metric
+        object_models = load_object_model_for_evaluation(obj_name)
+        obj_state_tensor = gather_object_state_tensor(env_kwargs['demo_data'])
 
+    else:
+        obj_state_tensor = None
     agent_cfg_fname = get_rl_config_path("rl_games_ppo_cfg")
     
     with open(agent_cfg_fname, encoding="utf-8") as f:
@@ -723,7 +738,8 @@ def main():
             args.print_rew, 
             args.record_video, 
             args.show_reference,
-            args.save_traj
+            args.save_traj,
+            no_object
             )
         
         # if object_models is not None:
