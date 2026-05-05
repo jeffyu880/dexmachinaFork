@@ -26,10 +26,10 @@ PARAM_FILE="training_params_multi_demo_$(date +%Y%m%d_%H%M%S).txt"
 
 # Define parameters once as associative arrays
 declare -A PARAMS=(
-    [batch_size]="-B 10"      #  the # num_envs
-    [epochs]="-obf -obt --max_epochs 20"
+    [batch_size]="-B 15000"      #  the # num_envs         ALPS uses: 15000
+    [epochs]="-obf -obt --max_epochs 4000"                 # ALPS uses: 4000
     [object]="--actuate_object --retarget_name para --horizon 32"
-    [learning]="-imw 0.5 --learning_rate 0.0001"
+    [learning]="-imw 0.5 --learning_rate 0.0003"
     [curriculum]="--gain_mode all --curr_schedule uniform --wait_epochs 200 --num_zero_epoch 500"
     [gains]="--fixed_mode uniform --uniform_mode slow --group_collisions"
     [rewards]="--contact_beta 10 --upper_ratios 0.9 0.9 1 --lower_ratios 0.6 0.6 1"
@@ -37,8 +37,8 @@ declare -A PARAMS=(
     [thresholds]="--aux_reset_thres 0 0 0 --curr_rew_thres 0.6 0 0 0"
     [training]="--skip_grad --deque_len 20 --save_freq 500 --use_retarget_contact"
     [arm_model]="-am hybrid --hybrid_scales 0.1 1.0 --kp_init 80 --kv_init 5"
-    [weights]="-imi 0.2 -bc 0.2 -con 2.0 -ert 0.3"
-    [experiment]="-exp multi-demo-3-lr-0.0001"
+    [weights]="-imi 0.2 -bc 0.2 -con 0.0 -ert 0.3"
+    [experiment]="-exp imitation_training"
     [hand]="--hand allegro_hand"
     [seed]="--seed 24"
     [no_object]="-no_obj"
@@ -48,6 +48,11 @@ declare -A PARAMS=(
     # [randomization]="-rand_obs"         # rand_obs is randomizing observations into the robot and object policy
     # [checkpoint]="--checkpoint /path/to/your/checkpoint.pth"
 )
+
+# to be used for actual contact training
+    # "ketchup-40-140-s02-u01"
+    # "ketchup-27-127-s02-u03"
+    # "ketchup-27-127-s02-u04"
 
 # Multiple demo clips for training.
 # Format: object-start-end[-subject][-use_clip]
@@ -67,22 +72,22 @@ declare -A PARAMS=(
 # )
 
 DEMOS=(
-    "ketchup-0-200-s01-u01"
-    # "ketchup-0-500-s01-u02"
-    # "ketchup-0-500-s04-u02"
-    # "ketchup-0-500-s05-u01"
-    # "ketchup-0-500-s06-u01"
-    # "ketchup-0-500-s06-u02"
-    # "ketchup-0-500-s07-u02"
-    # "ketchup-0-500-s08-u01"
-    # "ketchup-0-500-s08-u02"
-    # "ketchup-0-500-s08-u04"
-    # "ketchup-0-500-s09-u01"
-    # # "ketchup-0-500-s09-u02"
-    # "ketchup-0-500-s09-u03"
-    # "ketchup-0-500-s09-u04"
-    # "ketchup-0-500-s10-u01"
-    # "ketchup-0-500-s10-u02"
+    "ketchup-0-500-s01-u01"
+    "ketchup-0-500-s01-u02"
+    "ketchup-0-500-s04-u02"
+    "ketchup-0-500-s05-u01"
+    "ketchup-0-500-s06-u01"
+    "ketchup-0-500-s06-u02"
+    "ketchup-0-500-s07-u02"
+    "ketchup-0-500-s08-u01"
+    "ketchup-0-500-s08-u02"
+    "ketchup-0-500-s08-u04"
+    "ketchup-0-500-s09-u01"
+    "ketchup-0-500-s09-u02"
+    "ketchup-0-500-s09-u03"
+    "ketchup-0-500-s09-u04"
+    "ketchup-0-500-s10-u01"
+    "ketchup-0-500-s10-u02"
 )
 
 # Build the training command once so we can log and execute the exact same args.

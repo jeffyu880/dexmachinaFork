@@ -11,10 +11,11 @@
 #SBATCH --error=logs/allegro/multi_demo/slurm-%j/slurm-%j.err
 #SBATCH --mail-user=jeffrey.yu@epfl.ch
 #SBATCH --mail-type=END,FAIL
-#SBATCH --time 72:00:00
+#SBATCH --time 24:00:00
 
 echo "Starting dexmachina allegro training on $HOSTNAME at $TIMESTAMP"
 source /users/jsyu/miniconda/etc/profile.d/conda.sh
+cond init
 conda activate dexmachina-5
 wandb online
 bash examples/train_rl_multi_demo.sh
