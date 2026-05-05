@@ -484,6 +484,10 @@ class BaseEnv:
         self.per_demo_con_rew = torch.zeros(num_demos, device=self.device)
         self.per_demo_imi_rew = torch.zeros(num_demos, device=self.device)
         self.per_demo_bc_rew = torch.zeros(num_demos, device=self.device)
+        self.per_demo_ep_lengths = torch.zeros(num_demos, device=self.device)
+        self.per_demo_ep_counts = torch.zeros(num_demos, device=self.device)
+        counts = torch.bincount(self.env_demo_idx, minlength=num_demos).float()
+        self.per_demo_env_counts = counts.clamp(min=1.0)
 
     def setup_actions(self, robots: Dict[str, BaseRobot]):
         action_dim = 0 
@@ -686,14 +690,22 @@ class BaseEnv:
 
         if self.env_demo_idx is not None and hasattr(self, 'per_demo_task_rew'):
             for i, name in enumerate(self.demo_log_names):
-                self.extras["log"][f"demo_rew/task/{name}"] = self.per_demo_task_rew[i].item()
-                self.extras["log"][f"demo_rew/con/{name}"] = self.per_demo_con_rew[i].item()
-                self.extras["log"][f"demo_rew/imi/{name}"] = self.per_demo_imi_rew[i].item()
-                self.extras["log"][f"demo_rew/bc/{name}"] = self.per_demo_bc_rew[i].item()
+                n = self.per_demo_env_counts[i].item()
+                self.extras["log"][f"demo_rew/task/{name}"] = self.per_demo_task_rew[i].item() / n
+                self.extras["log"][f"demo_rew/con/{name}"] = self.per_demo_con_rew[i].item() / n
+                self.extras["log"][f"demo_rew/imi/{name}"] = self.per_demo_imi_rew[i].item() / n
+                self.extras["log"][f"demo_rew/bc/{name}"] = self.per_demo_bc_rew[i].item() / n 
             self.per_demo_task_rew.zero_()
             self.per_demo_con_rew.zero_()
             self.per_demo_imi_rew.zero_()
             self.per_demo_bc_rew.zero_()
+        if self.env_demo_idx is not None and hasattr(self, 'per_demo_ep_lengths'):
+            for i, name in enumerate(self.demo_log_names):
+                count = self.per_demo_ep_counts[i].item()
+                if count > 0:
+                    self.extras["log"][f"demo_ep_len/{name}"] = self.per_demo_ep_lengths[i].item() / count
+            self.per_demo_ep_lengths.zero_()
+            self.per_demo_ep_counts.zero_()
 
         self.extras["log"].update(rew_dict)
         self.extras["log"]["no_object"] = self.no_object
@@ -1023,6 +1035,10 @@ class BaseEnv:
         progressed = self.episode_length_buf[env_idxs] - self.episode_start_buf[env_idxs]
         progressed_avg = torch.mean(progressed.float()).item()
         self.max_achieved_length = int(self.max_achieved_length * 0.5 + progressed_avg * 0.5)
+        if self.env_demo_idx is not None and hasattr(self, 'per_demo_ep_lengths'):
+            demo_idxs = self.env_demo_idx[env_idxs]
+            self.per_demo_ep_lengths.scatter_add_(0, demo_idxs, progressed.float())
+            self.per_demo_ep_counts.scatter_add_(0, demo_idxs, torch.ones(len(env_idxs), device=self.device))
         
         # Debug: print episode rewards before reset
         if len(env_idxs) > 0 and self.use_curriculum:
