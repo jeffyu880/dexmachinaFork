@@ -5,8 +5,8 @@ TIMESTAMP=$(date +%m%d_%H%M%S)
 
 # Define parameters once as associative arrays
 declare -A PARAMS=(
-    [batch_size]="-B 10000"      # should be the num_envs > decreased from 12000 for GPU memory constraints
-    [epochs]="-obf -obt --max_epochs 10000"      # > increased from 5000 to have the same number of total steps
+    [batch_size]="-B 15000"      # should be the num_envs > decreased from 12000 for GPU memory constraints
+    [epochs]="--max_epochs 5000"      # > increased from 5000 to have the same number of total steps
     [object]="--actuate_object --retarget_name para --horizon 32"
     [learning]="-imw 0.5 --learning_rate 0.0003"
     [curriculum]="--gain_mode all --curr_schedule uniform --wait_epochs 200 --num_zero_epoch 500"
@@ -18,10 +18,11 @@ declare -A PARAMS=(
     [arm_model]="-am hybrid --hybrid_scales 0.1 1.0 --kp_init 80 --kv_init 5"
     [demo]="--clip ketchup-40-140-s02-u01"
     [weights]="-imi 0.2 -bc 0.2 -con 2.0 -ert 0.5"
-    [experiment]="-exp demo_2_${TIMESTAMP}"
+    [experiment]="-exp real_obs${TIMESTAMP}"
     [hand]="--hand allegro_hand"
     [seed]="--seed 456"
-    [checkpoint]="--checkpoint /home/jsyu/Genesis/dexmachinaFork/logs/rl_games/allegro_hand/allegro-mandi_full_ketchup30-130-s01-u01_B10000_hybrid_thres0.5_ho32_imi0.2_con2.0_bc0.2/nn/last_allegro_hand_ep_4510_rew__90.88122_.pth"
+    [retarget]='--use_ik_retarget'
+    # [checkpoint]="--checkpoint /home/jsyu/Genesis/dexmachinaFork/logs/rl_games/allegro_hand/allegro-mandi_full_ketchup30-130-s01-u01_B10000_hybrid_thres0.5_ho32_imi0.2_con2.0_bc0.2/nn/last_allegro_hand_ep_4510_rew__90.88122_.pth"
 )
 
 # Build the training command once so we can log and execute the exact same args.
@@ -43,6 +44,7 @@ CMD=(
     ${PARAMS[hand]}
     ${PARAMS[seed]}
     ${PARAMS[checkpoint]}
+    ${PARAMS[retarget]}
 )
 
 # Generate PRETTY_CMD by joining parameters with backslashes and proper formatting
