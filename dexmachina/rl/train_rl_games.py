@@ -145,6 +145,9 @@ def main():
     wandb_cfg['clip'] = f"{obj_name}{start}-{end}-{subject_name}-u{use_clip}"
     wandb_cfg['hand'] = args.hand
     
+
+    wandb.login(key="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")
+    
     run = wandb.init(
         project=args.wandb_project, 
         config=wandb_cfg,

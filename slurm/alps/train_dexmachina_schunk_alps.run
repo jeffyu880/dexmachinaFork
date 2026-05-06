@@ -12,6 +12,6 @@
 #SBATCH --time 48:00:00
 
 echo "Starting dexmachina schunk training on $HOSTNAME"
-source /users/jsyu/miniconda/etc/profile.d/conda.sh
+source /users/jsyu/miniconda3/etc/profile.d/conda.sh
 conda activate dexmachina-5
 bash examples/train_rl_schunk_box.sh
