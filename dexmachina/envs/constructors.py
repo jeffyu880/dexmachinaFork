@@ -105,8 +105,7 @@ def get_all_env_cfg(args, device, load_retarget_data=True):
     env_cfg['early_reset_aux_thres'] = dict(con=args.aux_reset_thres[0], imi=args.aux_reset_thres[1], bc=args.aux_reset_thres[2])
     env_cfg['episode_length'] = ep_len
     env_cfg['observe_tip_dist'] = args.observe_tip_dist
-    env_cfg['observe_contact_force'] = True #ve_contact_force
-    print(f"Setting observe_contact_force to True")
+    env_cfg['observe_contact_force'] = args.observe_contact_force
     env_cfg['use_contact_reward'] = (args.contact_rew_weight > 0) and (not args.no_object)
     env_cfg['use_rl_games'] = args.use_rl_games
     env_cfg['rand_init_ratio'] = args.rand_init_ratio  
