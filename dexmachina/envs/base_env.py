@@ -525,25 +525,25 @@ class BaseEnv:
             obs_dim_info[k] = dim_info
             obs_idxs[k] = (obs_dim, obs_dim + dim)
             obs_dim += dim
-            # print("ROBOT DIM: ", obs_dim)
+            print("ROBOT DIM: ", obs_dim)
         for k, obj in self.objects.items():
             dim, dim_info = obj.compute_obs_dim()
             obs_dim_info[k] = dim_info
             obs_idxs[k] = (obs_dim, obs_dim + dim)
             obs_dim += dim
-            # print("OBJECT DIM: ", obs_dim)
+            print("OBJECT DIM: ", obs_dim)
         if self.observe_tip_dist:
             n_kpts = self.robots['left'].n_kpts + self.robots['right'].n_kpts
             obs_dim += n_kpts * 2 # because two obj parts!
-            # print("KPT DIM: ", obs_dim)
+            print("KPT DIM: ", obs_dim)
         if self.observe_contact_force:
             obs_dim += self.num_obj_links * self.num_robot_links * 1 # 3 for force vec
-            # print("CONTACT DIM: ", obs_dim)
+            print("CONTACT DIM: ", obs_dim)
         obs_idxs['episode_length'] = (obs_dim, obs_dim + 1) 
         # ep_len_dim = 1 #* 10      # NOT USED AS WE DONT HAVE EPISODE LENGTHS IN REAL LIFE
         # obs_dim += ep_len_dim
 
-        # print("observation dimension: ", obs_dim)
+        print("observation dimension: ", obs_dim)
         # return 20, obs_idxs
         return obs_dim, obs_idxs
     
@@ -1014,7 +1014,6 @@ class BaseEnv:
           #  print(f"[OBS] Contact force shape: {force_flat.shape}")
             value_list.append(force_flat)
         obs = torch.cat(value_list, dim=-1)
-        print(f"[OBS] TOTAL concatenated observation shape: {obs.shape}")
         self.obs_dict = all_obs_dict
         # if sum(torch.isnan(obs).flatten()) > 0:
         #     print("NAN OBSERVATIONS")
