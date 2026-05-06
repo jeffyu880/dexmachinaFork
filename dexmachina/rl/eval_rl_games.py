@@ -78,8 +78,8 @@ def remap_paths_in_config(config, server_username='jsyu', local_base_path=None):
     elif isinstance(config, (str, Path)):
         # Convert Path to string for processing
         config_str = str(config)
-        # Check if this is a server path
-        if f'/home/{server_username}/' in config_str:
+        # Check if this is a server path (handle both /home/ and /users/ prefixes)
+        if f'/home/{server_username}/' in config_str or f'/users/{server_username}/' in config_str:
             # Replace server path with local path
             # Extract the part after Genesis/
             if '/Genesis/' in config_str:
@@ -544,9 +544,12 @@ def main():
     
     # Remap server paths to local paths
     print("[INFO] Remapping server paths to local paths...")
-    env_kwargs = remap_paths_in_config(env_kwargs, server_username='jsyu')
-    env_kwargs = remap_paths_in_config(env_kwargs, server_username='students/Jeffrey')
-    
+    env_kwargs = remap_paths_in_config(env_kwargs, server_username='jsyu')  # SCITAS 
+    env_kwargs = remap_paths_in_config(env_kwargs, server_username='students/Jeffrey')      # Sycamore
+    env_kwargs = remap_paths_in_config(env_kwargs, server_username='users/jsyu')      # ALPS Bristen
+
+    for side in ['left', 'right']:
+        env_kwargs['robot_cfgs'][side]['show_keypoints'] = True
     assert env_kwargs['env_cfg']['use_rl_games'], "The saved environment is not from rl-games"
 
     if args.raytrace and args.record_video:

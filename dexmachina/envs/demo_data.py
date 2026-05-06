@@ -129,10 +129,48 @@ def load_genesis_retarget_data(
         if len(kpt_pos.shape) > 3:
             print("Omitting the first dimension of kpt_pos")
             kpt_pos = kpt_pos[0]
+        kpt_pos = kpt_pos[frame_start:frame_end]
+        
+        kpt_names_raw = loaded["kpt_names"]
+        # Deduplicate keypoint names while preserving order
+        seen = set()
+        kpt_names = []
+        unique_idxs = []
+        for i, name in enumerate(kpt_names_raw):
+            if name not in seen:
+                kpt_names.append(name)
+                unique_idxs.append(i)
+                seen.add(name)
+        
+        # Verify that duplicate keypoints have identical position values
+        if len(unique_idxs) < len(kpt_names_raw):
+            from collections import defaultdict
+            name_to_indices = defaultdict(list)
+            for i, name in enumerate(kpt_names_raw):
+                name_to_indices[name].append(i)
+            
+            for name, indices in name_to_indices.items():
+                if len(indices) > 1:
+                    # Check all occurrences match the first
+                    ref_pos = kpt_pos[:, indices[0], :]  # shape (T, 3)
+                    for idx in indices[1:]:
+                        max_diff = torch.max(torch.abs(kpt_pos[:, idx, :] - ref_pos)).item()
+                        assert max_diff < 1e-5, (
+                            f"[{side}] Duplicate keypoint '{name}' at indices {indices[0]} and {idx} "
+                            f"have DIFFERENT position values (max_diff={max_diff:.2e}). "
+                            f"Cannot safely deduplicate!"
+                        )
+        
+        # Filter kpt_pos to only keep unique keypoints
+        if len(unique_idxs) < kpt_pos.shape[1]:
+            print(f"[{side}] Filtering kpt_pos: {kpt_pos.shape[1]} → {len(unique_idxs)} unique keypoints")
+            kpt_pos = kpt_pos[:, unique_idxs, :]  # (T, unique_kpts, 3)
+        
         kpt_info = dict(
-            kpt_pos=kpt_pos[frame_start:frame_end],
-            kpt_names=loaded["kpt_names"],
+            kpt_pos=kpt_pos,
+            kpt_names=kpt_names,
         )
+        # print("LOADING IN KEYBPOITN DICT: ", kpt_info['kpt_names'])
         wrist_pose = loaded[f"wrist_pose"]
         if len(wrist_pose.shape) > 2:
             print("Omitting the first dimension of wrist_pose")

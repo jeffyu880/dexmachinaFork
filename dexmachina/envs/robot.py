@@ -156,6 +156,7 @@ class BaseRobot:
         all_joints = self.entity.joints  
         self.actuated_joints = [joint for joint in all_joints if joint.type in [gs.JOINT_TYPE.REVOLUTE, gs.JOINT_TYPE.PRISMATIC]]
         self.actuated_dof_names = [joint.name for joint in self.actuated_joints]
+        print("Actuated joints: ", self.actuated_dof_names)
         self.actuated_dof_idxs = [joint.dof_idx_local for joint in self.actuated_joints]
         self.ndof = len(self.actuated_joints) # NOTE this is NOT necessarily action dim due to mimic joints
         self.wrist_only = robot_cfg.get("wrist_only", False)
@@ -185,6 +186,7 @@ class BaseRobot:
         # setup mimic joint mapping, i.e. map the same action input index to multiple joints
         self.mimic_joint_map = self.cfg.get("mimic_joint_map", dict())
         self.setup_action_mapping(self.actuated_joints, self.mimic_joint_map)
+        print("mimic joints: ", self.mimic_joint_map)
 
         # setup default joint qpos based on mimic joint mapping
         qposes = np.concatenate([joint.init_qpos for joint in self.actuated_joints]) # shape (ndof,) 
@@ -231,9 +233,17 @@ class BaseRobot:
         
         if 'kpts_data' in retarget_data:
             print(f"Overwrite kpt_link_names with saved retarget data")
-            link_names = retarget_data['kpts_data']['kpt_names']
+            raw_kpt_names = retarget_data['kpts_data']['kpt_names']
+            # Deduplicate while preserving order: keep first occurrence
+            seen = set()
+            link_names = []
+            for name in raw_kpt_names:
+                if name not in seen:
+                    link_names.append(name)
+                    seen.add(name)
+            print(f"[{self.name}] Deduped keypoint names: {len(raw_kpt_names)} → {len(link_names)} unique")
         
-        # print("LINK NAMES: ", link_names)
+        print("LINK NAMES: ", link_names)
         self.set_kpt_links(link_names)
 
         self.kpt_markers = []
@@ -746,6 +756,7 @@ class BaseRobot:
             goal_dim = self.ndof,   # goal pos   
             prev_goal_dim = self.ndof
         )
+        # print("observation dimensionss: ", dims)
         return sum(dims.values()), dims
 
     def translate_actions(self, actions, episode_length_buf):
