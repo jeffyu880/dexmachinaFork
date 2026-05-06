@@ -426,7 +426,8 @@ class BaseEnv:
                 )
             self.num_left_contact_links = len(self.robots['left'].coll_idxs_global)
 
-            print("num_obj_links", self.num_obj_links) 
+            print("num_obj_links ", self.num_obj_links) 
+            print("num_robot_links ", self.num_robot_links)
         
 
         self.obs_dim, self.obs_idxs = self.compute_obs_dim() 
@@ -524,23 +525,25 @@ class BaseEnv:
             obs_dim_info[k] = dim_info
             obs_idxs[k] = (obs_dim, obs_dim + dim)
             obs_dim += dim
+            # print("ROBOT DIM: ", obs_dim)
         for k, obj in self.objects.items():
             dim, dim_info = obj.compute_obs_dim()
             obs_dim_info[k] = dim_info
             obs_idxs[k] = (obs_dim, obs_dim + dim)
             obs_dim += dim
+            # print("OBJECT DIM: ", obs_dim)
         if self.observe_tip_dist:
             n_kpts = self.robots['left'].n_kpts + self.robots['right'].n_kpts
             obs_dim += n_kpts * 2 # because two obj parts!
-        
+            # print("KPT DIM: ", obs_dim)
         if self.observe_contact_force:
             obs_dim += self.num_obj_links * self.num_robot_links * 1 # 3 for force vec
-
+            # print("CONTACT DIM: ", obs_dim)
         obs_idxs['episode_length'] = (obs_dim, obs_dim + 1) 
-        ep_len_dim = 1 #* 10
-        obs_dim += ep_len_dim
+        # ep_len_dim = 1 #* 10      # NOT USED AS WE DONT HAVE EPISODE LENGTHS IN REAL LIFE
+        # obs_dim += ep_len_dim
 
-        print("observation dimention: ", obs_dim)
+        # print("observation dimension: ", obs_dim)
         # return 20, obs_idxs
         return obs_dim, obs_idxs
     
@@ -571,6 +574,7 @@ class BaseEnv:
                 self.episode_length_buf[i] = i % self.chunk_ep_length
 
         self.max_achieved_length = 0
+        print("robot action dimensions: ", self.action_dim)
         self.actions = torch.zeros((self.num_envs, self.action_dim), device=self.device)
         self.last_actions = torch.zeros((self.num_envs, self.action_dim), device=self.device)
 
@@ -972,15 +976,16 @@ class BaseEnv:
         # contact_info = left.entity.get_contacts(obj.entity)
         # force, mask = contact_info['force_a'], contact_info['valid_mask']
         # print(force[mask].shape)
-        if self.chunk_ep_length > 0:
-            normalize_ep_len = 2.0 * self.episode_length_buf[:, None].float() / self.demo_length - 1.0
-        else:
-            normalize_ep_len = 2.0 * self.episode_length_buf[:, None].float() / self.max_episode_length - 1.0
-        value_list.append(normalize_ep_len)
+        # if self.chunk_ep_length > 0:
+        #     normalize_ep_len = 2.0 * self.episode_length_buf[:, None].float() / self.demo_length - 1.0
+        # else:
+        #     normalize_ep_len = 2.0 * self.episode_length_buf[:, None].float() / self.max_episode_length - 1.0
+        # value_list.append(normalize_ep_len)
 
         # value_list = []
         # value_list.append(normalize_ep_len.repeat(1, 20))
 
+        # computes finger keypoint to object distances
         if self.observe_tip_dist:
             assert self.n_objects == 1, "Only support one object for now"
             obj = self.objects[self.object_names[0]]
@@ -994,16 +999,22 @@ class BaseEnv:
                     )
                     name = f"{side}_kpt_dist_{part}"
                     # print(name, np.round(dists_tensor[:, :, i].cpu().numpy(), 2))
+            kpt_left_flat = self.kpt_dists_left.flatten(start_dim=1)
+            kpt_right_flat = self.kpt_dists_right.flatten(start_dim=1)
+          #  print(f"[OBS] Tip distance left shape: {kpt_left_flat.shape}")
+          #  print(f"[OBS] Tip distance right shape: {kpt_right_flat.shape}")
             value_list.extend([
-                self.kpt_dists_left.flatten(start_dim=1),
-                self.kpt_dists_right.flatten(start_dim=1),
+                kpt_left_flat,
+                kpt_right_flat,
                 ])
-
+            # print(15 x 2)
         if self.observe_contact_force:
             force_norm = torch.norm(self.contact_forces, dim=-1) * 0.01 # scale down! max contact force can go to 1000+
-            value_list.append(force_norm.flatten(start_dim=1))
-                    
+            force_flat = force_norm.flatten(start_dim=1)
+          #  print(f"[OBS] Contact force shape: {force_flat.shape}")
+            value_list.append(force_flat)
         obs = torch.cat(value_list, dim=-1)
+        print(f"[OBS] TOTAL concatenated observation shape: {obs.shape}")
         self.obs_dict = all_obs_dict
         # if sum(torch.isnan(obs).flatten()) > 0:
         #     print("NAN OBSERVATIONS")
