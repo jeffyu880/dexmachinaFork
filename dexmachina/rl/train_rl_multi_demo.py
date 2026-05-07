@@ -169,7 +169,7 @@ def main():
     
     # Create task name: combine unique object names
     task_name = "_".join(sorted(set(task_names)))
-    exp_name = f"{task_name}_combined_{timestamp}"
+    exp_name = f"{task_name}_{args.exp_name}_{timestamp}"
 
     num_envs = args.num_envs   
     
