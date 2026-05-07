@@ -5,6 +5,7 @@ import genesis as gs
 from dexmachina.envs.robot import BaseRobot
 from dexmachina.envs.object import ArticulatedObject
 from dexmachina.envs.rewards import RewardModule
+from dexmachina.envs.imitation_reward import compute_no_obj_imitation_reward
 from dexmachina.envs.math_utils import matrix_from_quat
 from dexmachina.envs.contacts import get_filtered_contacts
 from dexmachina.envs.randomizations import RandomizationModule
@@ -784,8 +785,34 @@ class BaseEnv:
             reward_kwargs.update(
                 contact_forces=self.contact_forces
             )
-            
-        rewards, rew_dict = self.reward_module.compute_reward(**reward_kwargs)
+        rewards = -1
+        # Use the dexMachina reward for training on 
+        if not self.no_object:
+            rewards, rew_dict = self.reward_module.compute_reward(**reward_kwargs)
+
+        # use the maniptrans reward for the imitator model
+        else:
+            running_progress_buf = self.episode_length_buf - self.episode_start_buf
+            reward, rew_dict = compute_no_obj_imitation_reward(
+                wrist_pose_left=self.robots['left'].wrist_pose,
+                wrist_pose_right=self.robots['right'].wrist_pose,
+                kpts_left=self.robots['left'].kpt_pos,
+                kpts_right=self.robots['right'].kpt_pos,
+                demo_wrist_left=self.reward_module.match_demo_state('wrist_pose_left', self.episode_length_buf),
+                demo_wrist_right=self.reward_module.match_demo_state('wrist_pose_right', self.episode_length_buf),
+                demo_kpts_left=self.reward_module.match_demo_state('kpts_left', self.episode_length_buf),
+                demo_kpts_right=self.reward_module.match_demo_state('kpts_right', self.episode_length_buf),
+                dof_vel_left=self.robots['left'].dof_vel,
+                dof_vel_right=self.robots['right'].dof_vel,
+                running_progress_buf=running_progress_buf,
+            )
+            failed = rew_dict.pop('failed_execute')
+            rewards = reward
+            self.reset_buf[:]       = self.reset_buf | failed
+            self.reset_terminated[:] = self.reset_terminated | failed
+
+        assert rew_dict is not None, "rew_dict is None! Reward computation failed."
+        assert rewards is not -1, "rewards are not computed correctly"
         
         if not self.use_rl_games:
             # scale the reward by 0.1 manually to match the scale in rl_games
