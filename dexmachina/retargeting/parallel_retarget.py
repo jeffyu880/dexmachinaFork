@@ -44,7 +44,7 @@ def create_scene(
     scene_cfg = dict(
         sim_options=gs.options.SimOptions(
             dt=dt,
-            substeps=2,
+            substeps=4,
             gravity=(0, 0, -9.81),
         ), 
         vis_options=gs.options.VisOptions(

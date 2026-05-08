@@ -22,14 +22,14 @@ from dexmachina.eval.utils import (
 
 def create_scene(obj_name: str, device: torch.device, num_envs: int):
     scene_cfg = dict(
-        sim_options=gs.options.SimOptions(dt=1 / 60, substeps=2, gravity=(0, 0, 0)),
+        sim_options=gs.options.SimOptions(dt=1 / 30, substeps=4, gravity=(0, 0, 0)),
         vis_options=gs.options.VisOptions(
             n_rendered_envs=1,
             show_world_frame=False,
             visualize_contact=False,
         ),
         rigid_options=gs.options.RigidOptions(
-            dt=1 / 60,
+            dt=1 / 30,
             constraint_solver=gs.constraint_solver.Newton,
             enable_collision=True,
             enable_joint_limit=True,

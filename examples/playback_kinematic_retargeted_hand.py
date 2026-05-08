@@ -60,7 +60,7 @@ def create_scene(args, object_name, urdfs, demo_data):
     scene_cfg = dict(
         sim_options=gs.options.SimOptions(
             dt=1/30,
-            substeps=2,
+            substeps=4,
             gravity=(0, 0, -9.81),
         ),
         rigid_options=gs.options.RigidOptions(
