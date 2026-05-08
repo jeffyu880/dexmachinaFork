@@ -173,6 +173,8 @@ def load_genesis_retarget_data(
             if isinstance(kpt_vel, np.ndarray):
                 kpt_vel = torch.tensor(kpt_vel, dtype=torch.float32)
             kpt_vel = kpt_vel[frame_start:frame_end]
+            if len(unique_idxs) < kpt_vel.shape[1]:
+                kpt_vel = kpt_vel[:, unique_idxs, :]
 
         kpt_info = dict(
             kpt_pos=kpt_pos,

@@ -213,7 +213,7 @@ def compute_no_obj_imitation_reward(
     for k, v in right_dict.items():
         rew_dict[f"no_obj_imi/right/{k}"] = v
 
-    rew_dict["task_rew"]       = total_rew
+    rew_dict["task_rew"]       = 0.0
     rew_dict["imi_rew"]        = total_rew.clone()
     rew_dict["failed_execute"] = failed_execute
     return total_rew, rew_dict
