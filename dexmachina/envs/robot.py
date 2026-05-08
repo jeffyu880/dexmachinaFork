@@ -101,7 +101,7 @@ class BaseRobot:
         device, 
         scene, 
         num_envs,
-        obs_scale={'dof_vel': 0.1, 'root_ang_vel': 0.1, 'contact_norm': 0.1},
+        obs_scale={'dof_vel': 0.1, 'root_ang_vel': 0.1, 'contact_norm': 0.1, 'kpt_vel': 0.1},
         retarget_data=dict(),
         visualize_contact=False,
         is_eval=False, 
@@ -712,7 +712,7 @@ class BaseRobot:
     def get_observations(self):
         assert self.initialized, "Robot not initialized"  
         target_pos_diff = self.curr_targets - self.dof_pos
-        obs_dict = { 
+        obs_dict = {
             "dof_target_pos": target_pos_diff,
             "dof_pos": unscale(
                 self.dof_pos,
@@ -721,7 +721,8 @@ class BaseRobot:
             ),
             "dof_vel": self.dof_vel,
             "kpt_pos": self.kpt_pos.view(self.num_envs, -1),
-            "wrist_pose": self.wrist_pose, 
+            "kpt_vel": self.kpt_vel.view(self.num_envs, -1),
+            "wrist_pose": self.wrist_pose,
             "goal_pos": self.curr_targets,
             "previous_pos": self.prev_dof_pos
         }
@@ -751,14 +752,15 @@ class BaseRobot:
         return obs_dict  
     
     def compute_obs_dim(self): 
-        dims = dict( 
-            qpos_dim = self.ndof,       #   dof_pos
-            qpos_target_dim = self.ndof,    # target pos diff
-            qvel_dim = self.ndof,   # dof vel
-            kpt_dim = int(len(self.kpt_link_names) * 3),    # kpt_pos
-            wrist_dim = 7,      # wrist pose
-            goal_dim = self.ndof,   # goal pos   
-            prev_goal_dim = self.ndof
+        dims = dict(
+            qpos_dim      = self.ndof,
+            qpos_target_dim = self.ndof,
+            qvel_dim      = self.ndof,
+            kpt_dim       = int(len(self.kpt_link_names) * 3),
+            kpt_vel_dim   = int(len(self.kpt_link_names) * 3),
+            wrist_dim     = 7,
+            goal_dim      = self.ndof,
+            prev_goal_dim = self.ndof,
         )
         # print("observation dimensionss: ", dims)
         return sum(dims.values()), dims
