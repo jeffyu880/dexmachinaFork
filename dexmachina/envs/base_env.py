@@ -144,6 +144,9 @@ def get_env_cfg(
         "n_envs_per_row": None, # this will default to grid layout 
         "chunk_ep_length": -1,#chunk the episode length
         "plane_urdf_path": 'urdf/plane/plane.urdf',
+        "tighten_method": "None",   # None | const | linear_decay | exp_decay | cos
+        "tighten_factor": 1.0,      # final scale factor (lower = tighter thresholds)
+        "tighten_steps": 10000,     # global steps over which to decay
         'camera_kwargs': camera_kwargs,
         'render_camera': 'front',  
     } 
@@ -220,8 +223,12 @@ class BaseEnv:
         self.obs_clip = env_cfg['obs_clip']
         self.dt = env_cfg['dt'] 
         self.early_reset_threshold = env_cfg['early_reset_threshold']
-        self.early_reset_interval = int(env_cfg['early_reset_interval']) 
+        self.early_reset_interval = int(env_cfg['early_reset_interval'])
         self.early_reset_aux_thres = env_cfg.get('early_reset_aux_thres', dict())
+        self.tighten_method = env_cfg.get('tighten_method', 'None')
+        self.tighten_factor = env_cfg.get('tighten_factor', 1.0)
+        self.tighten_steps  = env_cfg.get('tighten_steps', 10000)
+        self.training = env_cfg.get('training', True)
         # if true, return obs dict insteaf of obs
         self.use_rl_games = env_cfg['use_rl_games']
         self.reward_module = RewardModule(
@@ -575,6 +582,7 @@ class BaseEnv:
                 self.episode_length_buf[i] = i % self.chunk_ep_length
 
         self.max_achieved_length = 0
+        self.global_step = 0
         print("robot action dimensions: ", self.action_dim)
         self.actions = torch.zeros((self.num_envs, self.action_dim), device=self.device)
         self.last_actions = torch.zeros((self.num_envs, self.action_dim), device=self.device)
@@ -633,7 +641,23 @@ class BaseEnv:
             robot.step(self.actions[:, idxs], self._step_env_idxs)
         for k, obj in self.objects.items():
             obj.step() 
-            
+    
+    def set_imitation_scale_factor(self):
+        if not self.training:
+            return 1.0
+        t = self.global_step
+        if self.tighten_method == "const":
+            return self.tighten_factor
+        elif self.tighten_method == "linear_decay":
+            return 1.0 - (1.0 - self.tighten_factor) / self.tighten_steps * min(t, self.tighten_steps)
+        elif self.tighten_method == "exp_decay":
+            return (np.e * 2) ** (-t / self.tighten_steps) * (1.0 - self.tighten_factor) + self.tighten_factor
+        elif self.tighten_method == "cos":
+            return self.tighten_factor + np.abs(
+                -(1.0 - self.tighten_factor) * np.cos(t / self.tighten_steps * np.pi)
+            ) * (2 ** (-t / self.tighten_steps))
+        return 1.0  # "None" or unknown
+    
     def step(self, actions: torch.Tensor):
         """
         actions: torch.Tensor of shape (num_envs, action_dim)
@@ -650,7 +674,7 @@ class BaseEnv:
             obj.step()
             
         self.steps_since_reset += 1
-        # print("Steps since reset: ", self.steps_since_reset)
+        self.global_step += 1
         self.randomization.on_step(self.episode_length_buf)
         self.scene.step()  
         self.episode_length_buf += 1
@@ -793,6 +817,7 @@ class BaseEnv:
         # use the maniptrans reward for the imitator model
         else:
             running_progress_buf = self.episode_length_buf - self.episode_start_buf
+            scale_factor = self.set_imitation_scale_factor()
             reward, rew_dict = compute_no_obj_imitation_reward(
                 wrist_pose_left=self.robots['left'].wrist_pose,
                 wrist_pose_right=self.robots['right'].wrist_pose,
@@ -817,6 +842,7 @@ class BaseEnv:
                 finger_force_left=self.robots['left'].control_forces[:, 6:],
                 finger_force_right=self.robots['right'].control_forces[:, 6:],
                 running_progress_buf=running_progress_buf,
+                scale_factor=scale_factor,
             )
             failed = rew_dict.pop('failed_execute')
             rewards = reward

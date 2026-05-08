@@ -168,6 +168,7 @@ def compute_no_obj_imitation_reward(
     finger_force_left:        torch.Tensor,   # (N, 16)
     finger_force_right:       torch.Tensor,
     running_progress_buf:     torch.Tensor,   # (N,)
+    scale_factor:             float = 1.0,
 ) -> Tuple[torch.Tensor, Dict]:
 
     left_rew,  left_failed,  left_dict  = _hand_reward(
@@ -180,7 +181,7 @@ def compute_no_obj_imitation_reward(
         demo_kpts_vel_left,
         demo_wrist_vel_left,
         demo_wrist_ang_vel_left,
-        1.0,
+        scale_factor,
         running_progress_buf,
         ALLEGRO_LEFT_CFG['keypoint_idx'],
         wrist_force_left,
@@ -196,7 +197,7 @@ def compute_no_obj_imitation_reward(
         demo_kpts_vel_right,
         demo_wrist_vel_right,
         demo_wrist_ang_vel_right,
-        1.0,
+        scale_factor,
         running_progress_buf,
         ALLEGRO_RIGHT_CFG['keypoint_idx'],
         wrist_force_right,
