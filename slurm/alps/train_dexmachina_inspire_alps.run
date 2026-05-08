@@ -9,7 +9,7 @@
 #SBATCH --error=logs/inspire/slurm-%j.err
 #SBATCH --mail-user=jeffrey.yu@epfl.ch
 #SBATCH --mail-type=END,FAIL
-#SBATCH --time 48:00:00
+#SBATCH --time 24:00:00
 
 echo "Starting dexmachina inspire training on $HOSTNAME"
 source /users/jsyu/miniconda3/etc/profile.d/conda.sh
