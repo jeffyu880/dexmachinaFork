@@ -34,7 +34,7 @@ def create_scene(
     vis=False, 
     record_video=False,
     render_image=False,
-    dt=1/60,
+    dt=1/30,
     visualize_contact=False,
     device=torch.device("cuda"),
     n_rendered_envs=None,
@@ -394,12 +394,28 @@ def main(args):
                 retarget_type=retarget_type,
                 frame_start=start,
             ) 
-            retar_data[side] = retargeted_vals  
+            retar_data[side] = retargeted_vals
             # also save actuated_dof_names and actuated_dof_idxs
             retar_data[side]['actuated_dof_names'] = hand.actuated_dof_names
             retar_data[side]['actuated_dof_idxs'] = hand.actuated_dof_idxs
+            # store sliced MANO human keypoints (21 joints, world frame)
+            kpts = world_data[f"joints.{side}"][start:start + num_envs]  # (T, 21, 3)
+            retar_data[side]['kpt_pos'] = kpts.astype(np.float32)
+        # compute finite-difference velocities at 30 fps (ARCTIC capture rate)
+        _dt = 1.0 / 30.0
+        for side in ['left', 'right']:
+            hq = retar_data[side]['hand_qpos']  # (T, 22)
+            wq = retar_data[side]['wrist_qpos'] # (T, 6)
+            kp = retar_data[side]['kpt_pos']    # (T, 21, 3)
+            hand_vel  = np.diff(hq, axis=0) / _dt  # (T-1, 22)     
+            wrist_vel = np.diff(wq, axis=0) / _dt  # (T-1, 6)
+            kpt_vel   = np.diff(kp, axis=0) / _dt  # (T-1, 21, 3)
+            # pad last frame so shape stays (T, ...)
+            retar_data[side]['hand_vel_qpos']  = np.concatenate([hand_vel,  hand_vel[-1:]],  axis=0)    # finger jont velocities
+            retar_data[side]['wrist_vel_qpos'] = np.concatenate([wrist_vel, wrist_vel[-1:]], axis=0)    # wrist angular and linear velocity    
+            retar_data[side]['kpt_vel']        = np.concatenate([kpt_vel,   kpt_vel[-1:]],   axis=0)  # (T, 21, 3)  # finger keypoint linear velocities
         # save only retar_data into npy file
-        np.save(retargeter_save_fname, retar_data) 
+        np.save(retargeter_save_fname, retar_data)
         print(f"Saved retargeter data to {retargeter_save_fname}")
         # loaded = np.load(retargeter_save_fname, allow_pickle=True).item()
         # breakpoint()

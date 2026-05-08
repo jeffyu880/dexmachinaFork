@@ -59,7 +59,7 @@ def create_scene(args, object_name, urdfs, demo_data):
     gs.init(backend=gs.gpu)
     scene_cfg = dict(
         sim_options=gs.options.SimOptions(
-            dt=1/60,
+            dt=1/30,
             substeps=2,
             gravity=(0, 0, -9.81),
         ),
@@ -307,7 +307,7 @@ def main(args):
     # Save video from collected frames
     if args.record_video and len(frames) > 0:
         import cv2
-        fps = int(1 / (1/60) / 2)  # Approximate frame rate (half of simulation step rate)
+        fps = int(1 / (1/30) / 2)  # Approximate frame rate (half of simulation step rate)
         frame_height, frame_width = frames[0].shape[:2]
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         

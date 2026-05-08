@@ -17,7 +17,7 @@ def main(args):
     gs.init(backend=gs.gpu)
     scene_cfg = dict(
         sim_options=gs.options.SimOptions(
-            dt=1/60,
+            dt=1/30,
             substeps=2,
             gravity=(0, 0, -9.81) if not args.zero_gravity else (0, 0, 0), 
         ),
