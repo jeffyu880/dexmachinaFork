@@ -24,7 +24,7 @@ ENV_SPACING=(1.0, 1.0)
 
 
 def get_scene_cfg(
-    dt=1/60, 
+    dt=1/30, 
     zero_gravity=False, 
     show_viewer=False, 
     show_fps=False, 
@@ -83,7 +83,7 @@ def get_scene_cfg(
     return scene_cfg
 
 def get_env_cfg(
-    dt=1/60, 
+    dt=1/30, 
     use_visualizer=False, 
     show_viewer=False, 
     show_fps=False, 
@@ -804,6 +804,10 @@ class BaseEnv:
                 demo_kpts_right=self.reward_module.match_demo_state('kpts_right', self.episode_length_buf),
                 dof_vel_left=self.robots['left'].dof_vel,
                 dof_vel_right=self.robots['right'].dof_vel,
+                wrist_force_left=self.robots['left'].control_forces[:, :6],
+                wrist_force_right=self.robots['right'].control_forces[:, :6],
+                finger_force_left=self.robots['left'].control_forces[:, 6:],
+                finger_force_right=self.robots['right'].control_forces[:, 6:],
                 running_progress_buf=running_progress_buf,
             )
             failed = rew_dict.pop('failed_execute')

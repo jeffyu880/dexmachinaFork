@@ -329,6 +329,7 @@ class BaseRobot:
                 self.kpt_link_idxs.append(link_names.index(name))
             else:
                 print(f"WARNING - Link {name} not found in the URDF")
+        print("Keypoint link names: ", self.kpt_link_names)
         self.n_kpts = len(self.kpt_link_names)
         return 
     

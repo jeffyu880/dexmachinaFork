@@ -26,8 +26,8 @@ PARAM_FILE="training_params_multi_demo_$(date +%Y%m%d_%H%M%S).txt"
 
 # Define parameters once as associative arrays
 declare -A PARAMS=(
-    [batch_size]="-B 12000"      #  the # num_envs
-    [epochs]="-obf -obt --max_epochs 5000"
+    [batch_size]="-B 1"      #  the # num_envs
+    [epochs]="-obf -obt --max_epochs 2"
     [object]="--actuate_object --retarget_name para --horizon 32"
     [learning]="-imw 0.5 --learning_rate 0.0003"
     [curriculum]="--gain_mode all --curr_schedule uniform --wait_epochs 200 --num_zero_epoch 500"
@@ -68,21 +68,21 @@ declare -A PARAMS=(
 
 DEMOS=(
     "ketchup-0-500-s01-u01"
-    "ketchup-0-500-s01-u02"
-    "ketchup-0-500-s04-u02"
-    "ketchup-0-500-s05-u01"
-    "ketchup-0-500-s06-u01"
-    "ketchup-0-500-s06-u02"
-    "ketchup-0-500-s07-u02"
-    "ketchup-0-500-s08-u01"
-    "ketchup-0-500-s08-u02"
-    "ketchup-0-500-s08-u04"
-    "ketchup-0-500-s09-u01"
-    # "ketchup-0-500-s09-u02"
-    "ketchup-0-500-s09-u03"
-    "ketchup-0-500-s09-u04"
-    "ketchup-0-500-s10-u01"
-    "ketchup-0-500-s10-u02"
+    # "ketchup-0-500-s01-u02"
+    # "ketchup-0-500-s04-u02"
+    # "ketchup-0-500-s05-u01"
+    # "ketchup-0-500-s06-u01"
+    # "ketchup-0-500-s06-u02"
+    # "ketchup-0-500-s07-u02"
+    # "ketchup-0-500-s08-u01"
+    # "ketchup-0-500-s08-u02"
+    # "ketchup-0-500-s08-u04"
+    # "ketchup-0-500-s09-u01"
+    # # "ketchup-0-500-s09-u02"
+    # "ketchup-0-500-s09-u03"
+    # "ketchup-0-500-s09-u04"
+    # "ketchup-0-500-s10-u01"
+    # "ketchup-0-500-s10-u02"
 )
 
 # Build the training command once so we can log and execute the exact same args.

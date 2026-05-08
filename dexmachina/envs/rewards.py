@@ -112,15 +112,15 @@ class RewardModule:
                 demo_data[key], dtype=torch.float32, device=device
             )
 
-        if self.use_imi_rew:
+        if self.use_imi_rew or self.no_object:
             for side in ['left', 'right']:
                 key = f"kpts_{side}"
                 self.demo_tensors[key] = torch.tensor(
-                    retarget_data[side]['kpts_data']['kpt_pos'], 
+                    retarget_data[side]['kpts_data']['kpt_pos'],
                     dtype=torch.float32, device=device
                 )
-        if self.contact_rew_weight > 0.0 or (self.use_imi_rew and self.imi_wrist_weight > 0.0):
-            # load wrist pose for contact reward
+        if self.contact_rew_weight > 0.0 or (self.use_imi_rew and self.imi_wrist_weight > 0.0) or self.no_object:
+            # load wrist pose for contact/imitation reward
             for side in ['left', 'right']:
                 key = f"wrist_pose_{side}"
                 if isinstance(retarget_data[side]['wrist_pose'], torch.Tensor):
@@ -258,6 +258,7 @@ class RewardModule:
         kpts_right: torch.Tensor,
         episode_length_buf: torch.Tensor,
     ):
+        # finger rewards
         fingertip_dist_left = self.compute_keypoint_dist(kpts_left, episode_length_buf, left_hand=True)
         fingertip_dist_right = self.compute_keypoint_dist(kpts_right, episode_length_buf, left_hand=False)
         fingertip_dist = torch.mean( (fingertip_dist_left + fingertip_dist_right) / 2.0 , dim=-1) # (B, num_links) -> (B,)

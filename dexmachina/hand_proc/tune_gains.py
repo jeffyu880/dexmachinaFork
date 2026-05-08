@@ -28,7 +28,7 @@ def create_scene(args, hand_urdfs, obj_name):
     gs.init(backend=gs.gpu)
     scene_cfg = dict(
         sim_options=gs.options.SimOptions(
-            dt=1/60,
+            dt=1/30,
             substeps=2,
             gravity=(0, 0, -9.81),
         ),

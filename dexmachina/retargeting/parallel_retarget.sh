@@ -21,15 +21,15 @@ echo "Using hand: $HAND"
 
 # Array of demonstrations with their sequences and user numbers
 demonstrations=(
-    "s01:1,2"
-    "s02:1,2,3,4"
-    "s04:2"
-    "s05:1"
-    "s06:1,2"
-    "s07:2"
-    "s08:1,2,3,4"
-    "s09:1,2,3,4"
-    "s10:1,2"
+    "s01:1"
+    # "s02:1,2,3,4"
+    # "s04:2"
+    # "s05:1"
+    # "s06:1,2"
+    # "s07:2"
+    # "s08:1,2,3,4"
+    # "s09:1,2,3,4"
+    # "s10:1,2"
 )
 
 # Convert to zero-padded format (e.g., 1 -> 01, 2 -> 02)
