@@ -1,7 +1,7 @@
 import os
 import sys
 import time
-import yaml 
+import yaml
 import torch
 import argparse
 import numpy as np
@@ -9,6 +9,7 @@ import genesis as gs
 from os.path import join
 from pathlib import Path
 from copy import deepcopy
+from scipy.ndimage import gaussian_filter1d
 
 from dexmachina.asset_utils import get_asset_path
 from dexmachina.envs.demo_data import get_demo_data 
@@ -25,6 +26,14 @@ from dex_retargeting.kinematics_adaptor import KinematicAdaptor, MimicJointKinem
 PROCESSED_DATADIR=get_asset_path("arctic/processed")
 RETARGET_DIR=get_asset_path("retargeted")
 RETARGETER_RESULTS_DIR=get_asset_path("retargeter_results")
+
+def compute_velocity(p, time_delta, gaussian_filter=True):
+    # p: (T, ...) torch.Tensor or numpy array
+    arr = p.cpu().numpy() if isinstance(p, torch.Tensor) else p
+    velocity = np.gradient(arr, axis=0) / time_delta
+    if gaussian_filter:
+        velocity = gaussian_filter1d(velocity, 2, axis=0, mode="nearest")
+    return torch.from_numpy(velocity)
 
 def create_scene(
     num_envs, 
@@ -398,22 +407,13 @@ def main(args):
             # also save actuated_dof_names and actuated_dof_idxs
             retar_data[side]['actuated_dof_names'] = hand.actuated_dof_names
             retar_data[side]['actuated_dof_idxs'] = hand.actuated_dof_idxs
-            # store sliced MANO human keypoints (21 joints, world frame)
-            kpts = world_data[f"joints.{side}"][start:start + num_envs]  # (T, 21, 3)
-            retar_data[side]['kpt_pos'] = kpts.astype(np.float32)
-        # compute finite-difference velocities at 30 fps (ARCTIC capture rate)
+        # compute joint velocities at 30 fps using gradient + gaussian smoothing
         _dt = 1.0 / 30.0
         for side in ['left', 'right']:
             hq = retar_data[side]['hand_qpos']  # (T, 22)
             wq = retar_data[side]['wrist_qpos'] # (T, 6)
-            kp = retar_data[side]['kpt_pos']    # (T, 21, 3)
-            hand_vel  = np.diff(hq, axis=0) / _dt  # (T-1, 22)     
-            wrist_vel = np.diff(wq, axis=0) / _dt  # (T-1, 6)
-            kpt_vel   = np.diff(kp, axis=0) / _dt  # (T-1, 21, 3)
-            # pad last frame so shape stays (T, ...)
-            retar_data[side]['hand_vel_qpos']  = np.concatenate([hand_vel,  hand_vel[-1:]],  axis=0)    # finger jont velocities
-            retar_data[side]['wrist_vel_qpos'] = np.concatenate([wrist_vel, wrist_vel[-1:]], axis=0)    # wrist angular and linear velocity    
-            retar_data[side]['kpt_vel']        = np.concatenate([kpt_vel,   kpt_vel[-1:]],   axis=0)  # (T, 21, 3)  # finger keypoint linear velocities
+            retar_data[side]['hand_vel_qpos']  = compute_velocity(hq, _dt).numpy().astype(np.float32)
+            retar_data[side]['wrist_vel_qpos'] = compute_velocity(wq, _dt).numpy().astype(np.float64)
         # save only retar_data into npy file
         np.save(retargeter_save_fname, retar_data)
         print(f"Saved retargeter data to {retargeter_save_fname}")
@@ -522,6 +522,17 @@ def main(args):
     
     data = gather_parallel_save_data(hands, retar_data)
     data['demo_data'] = demo_data
+
+    # overwrite kpt_pos with robot link positions (from FK) and compute kpt_vel
+    _dt = 1.0 / 30.0
+    for side in ['left', 'right']:
+        robot_kpt = data['retarget_data'][side]['kpt_pos']  # (T, n_kpts, 3) tensor
+        retar_data[side]['kpt_pos'] = robot_kpt.cpu().numpy().astype(np.float32)
+        retar_data[side]['kpt_vel'] = compute_velocity(robot_kpt, _dt).numpy().astype(np.float32)
+    if retargeter_save_fname is not None:
+        np.save(retargeter_save_fname, retar_data)
+        print(f"Re-saved retargeter data with robot kpt_pos to {retargeter_save_fname}")
+
     if args.save and (not args.replay_only):
         torch.save(data, save_fname)
         print(f"Saved data to {save_fname}")

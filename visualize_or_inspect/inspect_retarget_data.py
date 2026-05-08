@@ -6,10 +6,38 @@ import numpy as np
 from collections import Counter
 
 # Load the retargeting file
-data_fname = "dexmachina/assets/retargeted/allegro_hand/s01/ketchup_use_01_vector_para.pt"
+data_fname = "../dexmachina/assets/retargeted/allegro_hand/s01/ketchup_use_01_vector_pure_ik_para.pt"
 
 print(f"Loading: {data_fname}")
 data = torch.load(data_fname, weights_only=False)
+
+def describe(val):
+    if isinstance(val, torch.Tensor):
+        return f"Tensor shape={tuple(val.shape)} dtype={val.dtype}"
+    elif isinstance(val, np.ndarray):
+        return f"ndarray shape={val.shape} dtype={val.dtype}"
+    elif isinstance(val, list):
+        return f"list len={len(val)}"
+    elif isinstance(val, str):
+        return f"str={val}"
+    else:
+        return str(type(val).__name__)
+
+def print_structure(d, indent=0):
+    pad = "  " * indent
+    if isinstance(d, dict):
+        for k, v in d.items():
+            if isinstance(v, dict):
+                print(f"{pad}{k}: dict")
+                print_structure(v, indent + 1)
+            else:
+                print(f"{pad}{k}: {describe(v)}")
+    else:
+        print(f"{pad}{describe(d)}")
+
+print("\n=== FULL FILE STRUCTURE ===")
+print_structure(data)
+print("=" * 60)
 
 retarget_loaded = data["retarget_data"]
 

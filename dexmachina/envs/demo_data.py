@@ -112,7 +112,8 @@ def load_genesis_retarget_data(
     if len(demo_data['obj_arti'].shape) > 1:
         demo_data['obj_arti'] = demo_data['obj_arti'][:, 0] # shape (num_frames,)
 
-    retarget_loaded = data["retarget_data"] 
+    retarget_loaded = data["retarget_data"]
+    retargeter_results = data.get("retargeter_results", {})
     retarget_data = dict()
     for side in ['left', 'right']:
         loaded = retarget_loaded[side]
@@ -166,9 +167,17 @@ def load_genesis_retarget_data(
             print(f"[{side}] Filtering kpt_pos: {kpt_pos.shape[1]} → {len(unique_idxs)} unique keypoints")
             kpt_pos = kpt_pos[:, unique_idxs, :]  # (T, unique_kpts, 3)
         
+        kpt_vel = None
+        if side in retargeter_results and 'kpt_vel' in retargeter_results[side]:
+            kpt_vel = retargeter_results[side]['kpt_vel']
+            if isinstance(kpt_vel, np.ndarray):
+                kpt_vel = torch.tensor(kpt_vel, dtype=torch.float32)
+            kpt_vel = kpt_vel[frame_start:frame_end]
+
         kpt_info = dict(
             kpt_pos=kpt_pos,
             kpt_names=kpt_names,
+            kpt_vel=kpt_vel,
         )
         # print("LOADING IN KEYBPOITN DICT: ", kpt_info['kpt_names'])
         wrist_pose = loaded[f"wrist_pose"]
@@ -177,15 +186,23 @@ def load_genesis_retarget_data(
             wrist_pose = wrist_pose[0]
         wrist_pose = wrist_pose[frame_start:frame_end]
         num_frames = wrist_pose.shape[0]
+        wrist_vel_qpos = None
+        if side in retargeter_results and 'wrist_vel_qpos' in retargeter_results[side]:
+            wv = retargeter_results[side]['wrist_vel_qpos']
+            if isinstance(wv, np.ndarray):
+                wv = torch.tensor(wv, dtype=torch.float32)
+            wrist_vel_qpos = wv[frame_start:frame_end]  # (T, 6): [:3]=linear, [3:6]=angular
+
         retarget_data[side] = dict(
-            init_qpos=init_pos, 
-            limits=limits, 
+            init_qpos=init_pos,
+            limits=limits,
             residual_qpos=sliced_qpos,
             qpos_targets=qpos_targets,
             num_frames=num_frames,
             kpts_data=kpt_info,
-            wrist_pose=wrist_pose, # need this for contact frame reward
-            ) 
+            wrist_pose=wrist_pose,
+            wrist_vel_qpos=wrist_vel_qpos,  # (T, 6): [:3]=linear, [3:6]=angular
+            )
     return demo_data, retarget_data         # returns (2,) one per hand
 
 @lru_cache(maxsize=None)

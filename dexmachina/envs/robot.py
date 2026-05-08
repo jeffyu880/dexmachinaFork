@@ -673,8 +673,9 @@ class BaseRobot:
         self.prev_dof_pos = self.init_qpos.clone()
         self.curr_res_qpos = self.init_qpos.clone()
 
-        # track keypoint links 
+        # track keypoint links
         self.kpt_pos = torch.zeros((self.num_envs, self.n_kpts, 3), dtype=torch.float32, device=self.device)
+        self.kpt_vel = torch.zeros((self.num_envs, self.n_kpts, 3), dtype=torch.float32, device=self.device)
         self.wrist_pose = torch.zeros((self.num_envs, 7), dtype=torch.float32, device=self.device) # 4 for quat, 3 for pos
         # contact forces, 3dim per link -> no used anymore, main env thread gets obj-hand filtered contact
         # self.contact_forces = torch.zeros((self.num_envs, self.n_coll_links, 3), dtype=torch.float32, device=self.device)
@@ -687,7 +688,9 @@ class BaseRobot:
         self.dof_vel[:] = entity.get_dofs_velocity(self.actuated_dof_idxs)
 
         link_pos = entity.get_links_pos()
-        self.kpt_pos[:] = link_pos[:, self.kpt_link_idxs, :] 
+        link_vel = entity.get_links_vel()
+        self.kpt_pos[:] = link_pos[:, self.kpt_link_idxs, :]
+        self.kpt_vel[:] = link_vel[:, self.kpt_link_idxs, :]
         # self.contact_forces[:] = entity.get_links_net_contact_force()[:, self.coll_idxs_local, :]
         self.control_forces[:] = entity.get_dofs_control_force(self.actuated_dof_idxs)
         self.wrist_pose[:, :3] = link_pos[:, self.wrist_link_idx, :]
