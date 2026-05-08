@@ -583,6 +583,7 @@ class BaseEnv:
 
         self.max_achieved_length = 0
         self.global_step = 0
+        self.epoch_num = 0
         print("robot action dimensions: ", self.action_dim)
         self.actions = torch.zeros((self.num_envs, self.action_dim), device=self.device)
         self.last_actions = torch.zeros((self.num_envs, self.action_dim), device=self.device)
@@ -846,8 +847,9 @@ class BaseEnv:
             )
             failed = rew_dict.pop('failed_execute')
             rewards = reward
-            self.reset_buf[:]       = self.reset_buf | failed
-            self.reset_terminated[:] = self.reset_terminated | failed
+            if self.epoch_num >= 1000:
+                self.reset_buf[:]       = self.reset_buf | failed
+                self.reset_terminated[:] = self.reset_terminated | failed
 
         assert rew_dict is not None, "rew_dict is None! Reward computation failed."
         assert rewards is not -1, "rewards are not computed correctly"
