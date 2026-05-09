@@ -411,6 +411,14 @@ class ArticulatedObject:
         return nan_envs
         
     def get_observations(self):
+        # Returns obs_dict with shapes (num_envs, dim):
+        #   parts_pos    (n_links * 3)  — 3-D world position of each object link, flattened
+        #   parts_quat   (n_links * 4)  — quaternion of each object link, flattened
+        #   dof_pos      (num_joints)   — articulation joint angles (e.g. hinge/slider angle)
+        #   state_diff   (8)            — current minus goal state: root position (3) + quaternion (4) + scalar
+        #   root_ang_vel (3)            — root link angular velocity
+        #   root_lin_vel (3)            — root link linear velocity
+        #   goal_pos     (8)            — goal target state: root position (3) + quaternion (4) + scalar
         assert self.initialized, "Object not initialized"
         obs_dict = {
             "parts_pos": self.part_pos.flatten(start_dim=1),

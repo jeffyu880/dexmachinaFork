@@ -101,7 +101,8 @@ class BaseRobot:
         device, 
         scene, 
         num_envs,
-        obs_scale={'dof_vel': 0.1, 'root_ang_vel': 0.1, 'contact_norm': 0.1, 'kpt_vel': 0.1},
+        obs_scale={'dof_vel': 0.1, 'root_ang_vel': 0.1, 'contact_norm': 0.1, 'kpt_vel': 0.1,
+                   'goal_wrist_vel': 0.1, 'goal_wrist_ang_vel': 0.1, 'goal_kpt_vel': 0.1},
         retarget_data=dict(),
         visualize_contact=False,
         is_eval=False, 
@@ -677,9 +678,14 @@ class BaseRobot:
         self.kpt_pos = torch.zeros((self.num_envs, self.n_kpts, 3), dtype=torch.float32, device=self.device)
         self.kpt_vel = torch.zeros((self.num_envs, self.n_kpts, 3), dtype=torch.float32, device=self.device)
         self.wrist_pose = torch.zeros((self.num_envs, 7), dtype=torch.float32, device=self.device) # 4 for quat, 3 for pos
-        # contact forces, 3dim per link -> no used anymore, main env thread gets obj-hand filtered contact
-        # self.contact_forces = torch.zeros((self.num_envs, self.n_coll_links, 3), dtype=torch.float32, device=self.device)
-        self.control_forces = torch.zeros((self.num_envs, self.ndof), dtype=torch.float32, device=self.device) 
+        self.control_forces = torch.zeros((self.num_envs, self.ndof), dtype=torch.float32, device=self.device)
+
+        # goal state from demo (set each step via set_goal_state)
+        self.goal_wrist_pose    = torch.zeros((self.num_envs, 7),           dtype=torch.float32, device=self.device)
+        self.goal_kpt_pos       = torch.zeros((self.num_envs, self.n_kpts, 3), dtype=torch.float32, device=self.device)
+        self.goal_wrist_vel     = torch.zeros((self.num_envs, 3),           dtype=torch.float32, device=self.device)
+        self.goal_wrist_ang_vel = torch.zeros((self.num_envs, 3),           dtype=torch.float32, device=self.device)
+        self.goal_kpt_vel       = torch.zeros((self.num_envs, self.n_kpts, 3), dtype=torch.float32, device=self.device)
 
     def update_value_buffers(self):
         assert self.initialized, "Robot not initialized"
@@ -701,6 +707,13 @@ class BaseRobot:
             for i, marker in enumerate(self.kpt_markers):
                 marker.set_pos(kpt_pos[:, i, :])
 
+    def set_goal_state(self, wrist_pose, kpt_pos, wrist_vel, wrist_ang_vel, kpt_vel):
+        self.goal_wrist_pose[:]    = wrist_pose
+        self.goal_kpt_pos[:]       = kpt_pos
+        self.goal_wrist_vel[:]     = wrist_vel
+        self.goal_wrist_ang_vel[:] = wrist_ang_vel
+        self.goal_kpt_vel[:]       = kpt_vel
+
     def get_nan_envs(self):
         """ check along the env dim if self.dof_pos, self.dof_vel, self.kpt_pos have NaNs """
         assert self.initialized, "Robot not initialized"
@@ -710,21 +723,40 @@ class BaseRobot:
         return nan_mask
  
     def get_observations(self):
-        assert self.initialized, "Robot not initialized"  
-        target_pos_diff = self.curr_targets - self.dof_pos
+        # Returns obs_dict with shapes (num_envs, dim):
+        #   dof_target_pos     (num_envs, ndof)        — goal minus current joint angles
+        #   dof_pos            (num_envs, ndof)        — current joint angles, unscaled to [-1, 1]
+        #   dof_vel            (num_envs, ndof)        — current joint velocities
+        #   kpt_pos            (num_envs, n_kpts * 3)  — fingertip/keypoint 3-D world positions, flattened
+        #   kpt_vel            (num_envs, n_kpts * 3)  — fingertip/keypoint 3-D world velocities, flattened
+        #   wrist_pose         (num_envs, 7)           — wrist position (3) + quaternion (4)
+        #   goal_pos           (num_envs, ndof)        — target joint angles (curr_targets)
+        #   previous_pos       (num_envs, ndof)        — joint angles from the previous step
+        #   goal_wrist_pose    (num_envs, 7)           — demo target wrist position (3) + quaternion (4)
+        #   goal_kpt_pos       (num_envs, n_kpts * 3)  — demo target keypoint 3-D positions, flattened
+        #   goal_wrist_vel     (num_envs, 3)           — demo target wrist linear velocity
+        #   goal_wrist_ang_vel (num_envs, 3)           — demo target wrist angular velocity
+        #   goal_kpt_vel       (num_envs, n_kpts * 3)  — demo target keypoint 3-D velocities, flattened
+        assert self.initialized, "Robot not initialized"
+        target_pos_diff = self.curr_targets - self.dof_pos            # diff bn goal and curr joint states
         obs_dict = {
-            "dof_target_pos": target_pos_diff,
+            "dof_target_pos":     target_pos_diff,
             "dof_pos": unscale(
                 self.dof_pos,
                 self.dof_limits[:, 0],
                 self.dof_limits[:, 1],
             ),
-            "dof_vel": self.dof_vel,
-            "kpt_pos": self.kpt_pos.view(self.num_envs, -1),
-            "kpt_vel": self.kpt_vel.view(self.num_envs, -1),
-            "wrist_pose": self.wrist_pose,
-            "goal_pos": self.curr_targets,
-            "previous_pos": self.prev_dof_pos
+            "dof_vel":            self.dof_vel,
+            "kpt_pos":            self.kpt_pos.view(self.num_envs, -1),
+            "kpt_vel":            self.kpt_vel.view(self.num_envs, -1),
+            "wrist_pose":         self.wrist_pose,
+            "goal_pos":           self.curr_targets,
+            "previous_pos":       self.prev_dof_pos,
+            "goal_wrist_pose":    self.goal_wrist_pose,
+            "goal_kpt_pos":       self.goal_kpt_pos.view(self.num_envs, -1),
+            "goal_wrist_vel":     self.goal_wrist_vel,
+            "goal_wrist_ang_vel": self.goal_wrist_ang_vel,
+            "goal_kpt_vel":       self.goal_kpt_vel.view(self.num_envs, -1),
         }
 
         if self.randomize_observations:
@@ -752,15 +784,21 @@ class BaseRobot:
         return obs_dict  
     
     def compute_obs_dim(self): 
+        n_kpts = len(self.kpt_link_names)
         dims = dict(
-            qpos_dim      = self.ndof,
-            qpos_target_dim = self.ndof,
-            qvel_dim      = self.ndof,
-            kpt_dim       = int(len(self.kpt_link_names) * 3),
-            kpt_vel_dim   = int(len(self.kpt_link_names) * 3),
-            wrist_dim     = 7,
-            goal_dim      = self.ndof,
-            prev_goal_dim = self.ndof,
+            qpos_dim           = self.ndof,
+            qpos_target_dim    = self.ndof,
+            qvel_dim           = self.ndof,
+            kpt_dim            = n_kpts * 3,
+            kpt_vel_dim        = n_kpts * 3,
+            wrist_dim          = 7,
+            goal_dim           = self.ndof,
+            prev_goal_dim      = self.ndof,
+            goal_wrist_pose_dim = 7,
+            goal_kpt_pos_dim   = n_kpts * 3,
+            goal_wrist_vel_dim     = 3,
+            goal_wrist_ang_vel_dim = 3,
+            goal_kpt_vel_dim   = n_kpts * 3,
         )
         # print("observation dimensionss: ", dims)
         return sum(dims.values()), dims

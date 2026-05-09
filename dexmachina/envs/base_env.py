@@ -547,10 +547,6 @@ class BaseEnv:
         if self.observe_contact_force:
             obs_dim += self.num_obj_links * self.num_robot_links * 1 # 3 for force vec
             print("CONTACT DIM: ", obs_dim)
-        for side in ['left', 'right']:
-            n_kpts = self.robots[side].n_kpts
-            obs_dim += 3 + 3 + n_kpts * 3  # demo wrist_vel + wrist_ang_vel + kpt_vel
-        print("GOAL VEL DIM: ", obs_dim)
         obs_idxs['episode_length'] = (obs_dim, obs_dim + 1)
         # ep_len_dim = 1 #* 10      # NOT USED AS WE DONT HAVE EPISODE LENGTHS IN REAL LIFE
         # obs_dim += ep_len_dim
@@ -694,8 +690,9 @@ class BaseEnv:
         # Determine which envs should reset this step.
         self.reset_terminated[:], self.reset_time_outs[:] = self._get_dones() 
         self.reset_buf[:] = self.reset_terminated | self.reset_time_outs
- 
-        rew_dict = self._get_rewards()
+
+        if not self.is_eval:
+            rew_dict = self._get_rewards()
         if "log" not in self.extras:
             self.extras["log"] = dict() 
 
@@ -1084,10 +1081,13 @@ class BaseEnv:
             force_flat = force_norm.flatten(start_dim=1)
             value_list.append(force_flat)
         for side in ['left', 'right']:
-            wrist_vel     = self.reward_module.match_demo_state(f'wrist_vel_{side}', self.episode_length_buf)
-            wrist_ang_vel = self.reward_module.match_demo_state(f'wrist_ang_vel_{side}', self.episode_length_buf)
-            kpt_vel       = self.reward_module.match_demo_state(f'kpt_vel_{side}', self.episode_length_buf)
-            value_list.extend([wrist_vel * 0.1, wrist_ang_vel * 0.1, kpt_vel.view(self.num_envs, -1) * 0.1])
+            self.robots[side].set_goal_state(
+                wrist_pose    = self.reward_module.match_demo_state(f'wrist_pose_{side}', self.episode_length_buf),
+                kpt_pos       = self.reward_module.match_demo_state(f'kpts_{side}', self.episode_length_buf),
+                wrist_vel     = self.reward_module.match_demo_state(f'wrist_vel_{side}', self.episode_length_buf),
+                wrist_ang_vel = self.reward_module.match_demo_state(f'wrist_ang_vel_{side}', self.episode_length_buf),
+                kpt_vel       = self.reward_module.match_demo_state(f'kpt_vel_{side}', self.episode_length_buf),
+            )
         obs = torch.cat(value_list, dim=-1)
         self.obs_dict = all_obs_dict
         # if sum(torch.isnan(obs).flatten()) > 0:

@@ -549,7 +549,7 @@ def main():
     env_kwargs = remap_paths_in_config(env_kwargs, server_username='users/jsyu')      # ALPS Bristen
 
     for side in ['left', 'right']:
-        env_kwargs['robot_cfgs'][side]['show_keypoints'] = True
+        env_kwargs['robot_cfgs'][side]['show_keypoints'] = False
     assert env_kwargs['env_cfg']['use_rl_games'], "The saved environment is not from rl-games"
 
     if args.raytrace and args.record_video:
