@@ -255,8 +255,8 @@ def main(args):
     gs.init(backend=gs.gpu)
     scene_cfg = dict(
         sim_options=gs.options.SimOptions(
-            dt=1/60,
-            substeps=2,
+            dt=1/30,
+            substeps=4,
             gravity=(0, 0, 0),
         ),
         rigid_options=gs.options.RigidOptions(

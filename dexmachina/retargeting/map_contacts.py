@@ -80,8 +80,8 @@ def create_scene(args, object_name, urdfs, num_raw_contact_markers=50, num_group
     gs.init(backend=gs.gpu)
     scene_cfg = dict(
         sim_options=gs.options.SimOptions(
-            dt=1/60,
-            substeps=2,
+            dt=1/30,
+            substeps=4,
             gravity=(0, 0,0),
         ),
         rigid_options=gs.options.RigidOptions(

@@ -23,11 +23,11 @@ ENV_SPACING=(1.0, 1.0)
 
 
 def get_scene_cfg(
-    dt=1/60, 
-    zero_gravity=False, 
-    show_viewer=False, 
-    show_fps=False, 
-    batch_dofs_info=False, 
+    dt=1/30,
+    zero_gravity=False,
+    show_viewer=False,
+    show_fps=False,
+    batch_dofs_info=False,
     use_visualizer=False,
     n_rendered_envs=None,
     raytrace=False,
@@ -37,7 +37,7 @@ def get_scene_cfg(
     scene_cfg = dict(
         sim_options=gs.options.SimOptions(
             dt=dt,
-            substeps=2,
+            substeps=4,
             gravity=(0, 0, -9.81) if not zero_gravity else (0, 0, 0),
             #  gravity=(0, 0, 0),
         ), 
@@ -82,8 +82,8 @@ def get_scene_cfg(
     return scene_cfg
 
 def get_env_cfg(
-    dt=1/60, 
-    use_visualizer=False, 
+    dt=1/30,
+    use_visualizer=False,
     show_viewer=False, 
     show_fps=False, 
     zero_gravity=False, 

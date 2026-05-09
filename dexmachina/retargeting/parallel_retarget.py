@@ -34,7 +34,7 @@ def create_scene(
     vis=False, 
     record_video=False,
     render_image=False,
-    dt=1/60,
+    dt=1/30,
     visualize_contact=False,
     device=torch.device("cuda"),
     n_rendered_envs=None,
@@ -44,7 +44,7 @@ def create_scene(
     scene_cfg = dict(
         sim_options=gs.options.SimOptions(
             dt=dt,
-            substeps=2,
+            substeps=4,
             gravity=(0, 0, -9.81),
         ), 
         vis_options=gs.options.VisOptions(
