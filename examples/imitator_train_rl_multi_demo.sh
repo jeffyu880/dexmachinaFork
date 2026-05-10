@@ -35,15 +35,15 @@ declare -A PARAMS=(
     [rewards]="--contact_beta 10 --upper_ratios 0.9 0.9 1 --lower_ratios 0.6 0.6 1"
     [task_rewards]="--task_rew_betas 10 1 5 --action_penalty 0.01 --dialback_ep_len 30"
     [thresholds]="--aux_reset_thres 0 0 0 --curr_rew_thres 0.6 0 0 0"
-    [training]="--skip_grad --deque_len 20 --save_freq 500 --use_retarget_contact"
-    [arm_model]="-am hybrid --hybrid_scales 0.1 1.0 --kp_init 80 --kv_init 5"
+    [training]="--skip_grad --deque_len 20 --save_freq 500 --use_retarget_contact --vis"
+    [arm_model]="-am kinematic --hybrid_scales 0.1 1.0 --kp_init 80 --kv_init 5"
     [weights]="-imi 0.2 -bc 0.2 -con 0.0 -ert 0.0"
     [experiment]="-exp imitation"
     [hand]="--hand allegro_hand"
     [seed]="--seed 24"
     [no_object]="-no_obj"                           # only do hand mimicing 
     [randomization]="--rand_init_ratio 0.5"         # start the training 50% of the time from a random frame
-    [retarget]='--use_ik_retarget'          # use just IK kinematic retargeting
+    # [retarget]='--use_ik_retarget'          # use just IK kinematic retargeting
     # [sampling]="--demo_sampling deterministic"
     # [randomization]="-rand_obs"         # rand_obs is randomizing observations into the robot and object policy
     # [checkpoint]="--checkpoint /path/to/your/checkpoint.pth"
@@ -67,7 +67,7 @@ declare -A PARAMS=(
 # )
 
 DEMOS=(
-    "ketchup-0-500-s01-u01"
+    "ketchup-20-120-s01-u01"            # DONT START FROM STEP 0
     # "ketchup-0-500-s01-u02"
     # "ketchup-0-500-s04-u02"
     # "ketchup-0-500-s05-u01"

@@ -61,6 +61,7 @@ def load_multi_demo_data_separate(clip_list, args, device, exp_name, timestamp):
     base_env_cfg = None
     total_frames = 0
 
+    retarget_mode = "pure IK (no smoothing)" if getattr(args, 'use_ik_retarget', False) else f"smooth PD-settled (retarget_name={args.retarget_name})"
     demo_info_lines = [
         "=" * 80,
         "Multi-Demonstration Training Info",
@@ -68,6 +69,7 @@ def load_multi_demo_data_separate(clip_list, args, device, exp_name, timestamp):
         f"Experiment: {exp_name}",
         f"Timestamp: {timestamp}",
         f"Hand: {args.hand}",
+        f"Retargeting: {retarget_mode}",
         f"Total demos: {len(clip_list)}",
         "",
         "Demonstrations used:",
@@ -185,6 +187,7 @@ def main():
     import genesis as gs
     gs.init(backend=gs.gpu, logging_level='warning')
     base_env = BaseEnv(**env_kwargs)
+    plot = base_env.debug_plot
     
     # Now wrap the base environment for RL-Games
     env = base_env
@@ -304,6 +307,34 @@ def main():
     if args.checkpoint is not None:
         runner_args["checkpoint"] = os.path.abspath(args.checkpoint) 
     runner.run(runner_args)
+
+    if plot: 
+        from dexmachina.envs.imitation_reward import (
+            plot_finger_histograms, plot_vel_wrist_error, plot_pos_tip_keypoint_error,
+            plot_pos_gt_timeseries, plot_wrist_vel_gt_timeseries, plot_fingertip_vel_gt,
+            plot_wrist_gt, plot_3d_fingertip_trajectory,
+        )
+        ep_len = base_env.max_episode_length
+        hist_error_path   = os.path.join(ckpt_data_folder, "finger_tip_errors.png")         # hisotgram describing fingertip errors in bins
+        vel_error_path    = os.path.join(ckpt_data_folder, "velocity_errors.png")           # line plot of velocity errors 
+        fingertip_pos_path    = os.path.join(ckpt_data_folder, "position_timeseries.png")   # line plto of fingertip keypoint positoins
+        pos_gt_path = os.path.join(ckpt_data_folder, "position_gt.png")                     # line plot groudn truth position path
+        vel_gt_path = os.path.join(ckpt_data_folder, "velocity_gt.png")                     # line plot of ground wrist truth velocity path   
+        fingertip_vel_gt_path = os.path.join(ckpt_data_folder, "fingertip_vel_gt.png")      # plot of groudn truth and demo fingertip velocity 
+        wrist_gt_path         = os.path.join(ckpt_data_folder, "wrist_gt.png")              # plot of ground truth wrist position and rotation
+
+        plot_finger_histograms(save_path=hist_error_path, first_n=ep_len)                                        
+        plot_vel_wrist_error(save_path=vel_error_path, first_n=ep_len)                   
+        plot_pos_tip_keypoint_error(save_path=fingertip_pos_path, first_n=ep_len)                    
+        plot_pos_gt_timeseries(save_path=pos_gt_path, first_n=ep_len)                    
+        plot_wrist_vel_gt_timeseries(save_path=vel_gt_path, first_n=ep_len)                    
+        plot_fingertip_vel_gt(save_path=fingertip_vel_gt_path, first_n=ep_len)                   
+        plot_wrist_gt(save_path=wrist_gt_path, first_n=ep_len)
+        traj_3d_left_path  = os.path.join(ckpt_data_folder, "traj_3d_left.png")
+        traj_3d_right_path = os.path.join(ckpt_data_folder, "traj_3d_right.png")
+        plot_3d_fingertip_trajectory(side="left",  first_n=ep_len)
+        plot_3d_fingertip_trajectory(side="right", first_n=ep_len)
+
     wandb.finish()
 
     # close the simulator

@@ -6,14 +6,28 @@ allegro_asset_dir = "allegro_hand/"
 left_rel_urdf = join(allegro_asset_dir, "allegro_hand_left_6dof.urdf") 
 right_rel_urdf = join(allegro_asset_dir, "allegro_hand_right_6dof.urdf")
 
-# Order of storing kpts in 
-# ['link_15.0_tip', 'link_3.0_tip', 'link_7.0_tip', 
-#   'link_11.0_tip', 'base_link',    'link_0.0', 
-#   'link_4.0',       'link_8.0', 'link_12.0', 
-#    'link_1.0',     'link_5.0',  'link_9.0', 
-#     'link_13.0', 'link_2.0', 'link_6.0', 
-#     'link_10.0', 'link_14.0', 'link_3.0', 
-#    'link_7.0', 'link_11.0', 'link_15.0']
+# left kpt_names (raw, 25 entries):
+#   0: link_15.0_tip
+#   1: link_11.0_tip
+#   2: link_7.0_tip
+#   3: link_3.0_tip
+#   4: base_link
+#   5: link_0.0
+#   6: link_4.0
+#   7: link_8.0
+#   8: link_12.0
+#   9: link_1.0
+#   10: link_5.0
+#   11: link_9.0
+#   12: link_13.0
+#   13: link_2.0
+#   14: link_6.0
+#   15: link_10.0
+#   16: link_14.0
+#   17: link_3.0
+#   18: link_7.0
+#   19: link_11.0
+#   20: link_15.0
 
 # using 1 indexing to store indices for the kpt values
 
@@ -23,10 +37,10 @@ ALLEGRO_LEFT_CFG={
     "kpt_link_names": ["link_15.0_tip", "link_11.0_tip", "link_7.0_tip", "link_3.0_tip" ],
     
     "keypoint_idx" : {
-            "thumb_tip": [1],              # index 0: link_15.0_tip
-            "pinky_tip": [4],              # index 3: link_11.0_tip
-            "middle_tip": [3],             # index 2: link_7.0_tip
-            "index_tip": [2],              # index 1: link_11.0_tip
+            "thumb_tip": [1],              # link_15.0_tip
+            "index_tip": [2],              # link_11.0_tip
+            "middle_tip": [3],             # link_7.0_tip
+            "pinky_tip": [4],              # link_3.0_tip
             "level_1_joints": [6,  7,  8,  9,  10, 11, 12, 13],    # indices 5-8: link_0.0, link_4.0, link_8.0, link_12.0
             "level_2_joints": [14, 15, 16, 17, 18, 19, 20, 21], # indices 9-12: link_1.0, link_5.0, link_9.0, link_13.0
         },
@@ -54,16 +68,39 @@ ALLEGRO_LEFT_CFG={
     "collision_palm_name": "base_link",
 }
 
+# right kpt_names (raw, 25 entries):
+#   0: link_15.0_tip
+#   1: link_3.0_tip
+#   2: link_7.0_tip
+#   3: link_11.0_tip
+#   4: base_link
+#   5: link_0.0
+#   6: link_4.0
+#   7: link_8.0
+#   8: link_12.0
+#   9: link_1.0
+#   10: link_5.0
+#   11: link_9.0
+#   12: link_13.0
+#   13: link_2.0
+#   14: link_6.0
+#   15: link_10.0
+#   16: link_14.0
+#   17: link_3.0
+#   18: link_7.0
+#   19: link_11.0
+#   20: link_15.0
+
 ALLEGRO_RIGHT_CFG={
     "urdf_path": get_urdf_path(right_rel_urdf),
     "wrist_link_name": "base_dummy_link",
     "kpt_link_names": ["link_15.0_tip", "link_3.0_tip", "link_7.0_tip", "link_11.0_tip" ],
     
     "keypoint_idx" : {
-            "thumb_tip": [1],              # index 0: link_15.0_tip
-            "pinky_tip": [2],              # index 1: link_3.0_tip
-            "middle_tip": [3],             # index 2: link_7.0_tip
-            "index_tip": [4],              # index 3: link_11.0_tip
+            "thumb_tip": [1],              # link_15.0_tip
+            "index_tip": [2],              # link_3.0_tip
+            "middle_tip": [3],             # link_7.0_tip
+            "pinky_tip": [4],              # link_11.0_tip
             "level_1_joints": [6,  7,  8,  9,  10, 11, 12, 13],    # indices 5-8: link_0.0, link_4.0, link_8.0, link_12.0
             "level_2_joints": [14, 15, 16, 17, 18, 19, 20, 21], # indices 9-12: link_1.0, link_5.0, link_9.0, link_13.0
     }, 

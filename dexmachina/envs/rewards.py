@@ -123,10 +123,14 @@ class RewardModule:
                 if kpt_vel is not None:
                     self.demo_tensors[f"kpt_vel_{side}"] = kpt_vel.to(dtype=torch.float32, device=device)
                 wrist_vel_qpos = retarget_data[side].get('wrist_vel_qpos')
+                num_frames = retarget_data[side]['wrist_pose'].shape[0] if hasattr(retarget_data[side]['wrist_pose'], 'shape') else len(retarget_data[side]['wrist_pose'])
                 if wrist_vel_qpos is not None:
                     wrist_vel_qpos = wrist_vel_qpos.to(dtype=torch.float32, device=device)
-                    self.demo_tensors[f"wrist_vel_{side}"]     = wrist_vel_qpos[:, :3]  # linear
-                    self.demo_tensors[f"wrist_ang_vel_{side}"] = wrist_vel_qpos[:, 3:]  # angular
+                    self.demo_tensors[f"wrist_vel_{side}"]     = wrist_vel_qpos[:, :3]
+                    self.demo_tensors[f"wrist_ang_vel_{side}"] = wrist_vel_qpos[:, 3:]
+                else:
+                    self.demo_tensors[f"wrist_vel_{side}"]     = torch.zeros(num_frames, 3, device=device)
+                    self.demo_tensors[f"wrist_ang_vel_{side}"] = torch.zeros(num_frames, 3, device=device)
         if self.contact_rew_weight > 0.0 or (self.use_imi_rew and self.imi_wrist_weight > 0.0) or self.no_object:
             # load wrist pose for contact/imitation reward
             for side in ['left', 'right']:

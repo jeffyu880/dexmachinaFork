@@ -24,7 +24,7 @@ ENV_SPACING=(1.0, 1.0)
 
 
 def get_scene_cfg(
-    dt=1/30, 
+    dt=1/60, 
     zero_gravity=False, 
     show_viewer=False, 
     show_fps=False, 
@@ -38,7 +38,7 @@ def get_scene_cfg(
     scene_cfg = dict(
         sim_options=gs.options.SimOptions(
             dt=dt,
-            substeps=4,
+            substeps=2,
             gravity=(0, 0, -9.81) if not zero_gravity else (0, 0, 0),
             #  gravity=(0, 0, 0),
         ), 
@@ -395,6 +395,7 @@ class BaseEnv:
             print("Scene created but not built yet") 
             
         self.steps_since_reset = 0;
+        self.debug_plot = True
             
     def build_scene(self):
         env_cfg = self.env_cfg
@@ -845,6 +846,7 @@ class BaseEnv:
                 finger_force_right=self.robots['right'].control_forces[:, 6:],
                 running_progress_buf=running_progress_buf,
                 scale_factor=scale_factor,
+                debug=self.debug_plot,
             )
             failed = rew_dict.pop('failed_execute')
             rewards = reward

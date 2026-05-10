@@ -183,6 +183,29 @@ def main():
         runner_args["checkpoint"] = os.path.abspath(args.checkpoint) 
     runner.run(runner_args)
 
+    from dexmachina.envs.imitation_reward import (
+        plot_finger_histograms, plot_vel_timeseries, plot_pos_timeseries,
+        plot_pos_gt_timeseries, plot_vel_gt_timeseries,
+        plot_fingertip_vel_gt, plot_wrist_gt,
+    )
+    ep_len = env.max_episode_length
+    _exp_dir         = os.path.join(log_root_path, exp_name)
+    hist_path        = os.path.join(_exp_dir, "finger_tip_errors.png")
+    vel_path         = os.path.join(_exp_dir, "velocity_errors.png")
+    pos_path         = os.path.join(_exp_dir, "position_timeseries.png")
+    pos_gt_path      = os.path.join(_exp_dir, "position_gt.png")
+    vel_gt_path      = os.path.join(_exp_dir, "velocity_gt.png")
+    fing_vel_gt_path = os.path.join(_exp_dir, "fingertip_vel_gt.png")
+    wrist_gt_path    = os.path.join(_exp_dir, "wrist_gt.png")
+    os.makedirs(_exp_dir, exist_ok=True)
+    plot_finger_histograms(save_path=hist_path, last_n=ep_len)
+    plot_vel_timeseries(save_path=vel_path, last_n=ep_len)
+    plot_pos_timeseries(save_path=pos_path, last_n=ep_len)
+    plot_pos_gt_timeseries(save_path=pos_gt_path, last_n=ep_len)
+    plot_vel_gt_timeseries(save_path=vel_gt_path, last_n=ep_len)
+    plot_fingertip_vel_gt(save_path=fing_vel_gt_path, last_n=ep_len)
+    plot_wrist_gt(save_path=wrist_gt_path, last_n=ep_len)
+
     # send wandb alert when training is finished
     wandb.alert(
         title="Training Finished",

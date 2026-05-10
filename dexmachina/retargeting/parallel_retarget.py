@@ -443,16 +443,31 @@ def main(args):
         render_frames.append(img)
         
     
-    if args.no_smoothing:
-        # Set each env directly to its kinematic target, run one FK step, capture — no control loop needed
-        for side, hand in hands.items():
-            hand.set_joint_position(hand_qposes[side])
-        scene.step()
-        for side, hand in hands.items():
-            hand.collect_data_step(collect_all_envs=True)
-            
-        print("Saving direct IK playback as hand trajectory")
+    # ── always save pure-IK snapshot first ───────────────────────────────
+    for side, hand in hands.items():
+        hand.set_joint_position(hand_qposes[side])
+    scene.step()
+    for side, hand in hands.items():
+        hand.collect_data_step(collect_all_envs=True)
+        control_err = hand.get_control_errors()
+        print(f"[pure_ik] {side} control_err  mean={control_err.mean():.4f}  max={control_err.max():.4f}  min={control_err.min():.4f}")
+    ik_save_fname = get_save_fname(args, hand_name, input_fname, retarget_type + "_pure_ik", subject_name)
+    if args.save and not args.replay_only:
+        ik_data = gather_parallel_save_data(hands, retar_data)
+        ik_data['demo_data'] = demo_data
+        torch.save(ik_data, ik_save_fname)
+        print(f"Saved pure-IK data to {ik_save_fname}")
     else:
+        # flush buffer so the settling loop starts clean
+        for hand in hands.values():
+            hand.flush_episode_data()
+
+    # reset hands to IK positions before settling
+    for side, hand in hands.items():
+        hand.set_joint_position(hand_qposes[side])
+    scene.step()
+
+    if not args.no_smoothing:
         # for each env idx, set the initial object pose to the demo step
         iters = 0
         controlled_steps = {side: torch.zeros(num_envs, device=device) for side in ['left', 'right']}
@@ -523,12 +538,22 @@ def main(args):
     data = gather_parallel_save_data(hands, retar_data)
     data['demo_data'] = demo_data
 
-    # overwrite kpt_pos with robot link positions (from FK) and compute kpt_vel
+    # overwrite kpt_pos with settled FK and recompute all velocities from settled data
     _dt = 1.0 / 30.0
     for side in ['left', 'right']:
-        robot_kpt = data['retarget_data'][side]['kpt_pos']  # (T, n_kpts, 3) tensor
-        retar_data[side]['kpt_pos'] = robot_kpt.cpu().numpy().astype(np.float32)
-        retar_data[side]['kpt_vel'] = compute_velocity(robot_kpt, _dt).numpy().astype(np.float32)
+        robot_kpt  = data['retarget_data'][side]['kpt_pos']    # (T, n_kpts, 3) settled FK tensor
+        jqpos_dict = data['retarget_data'][side]['joint_qpos'] # dict {name: (T,) tensor}
+        dof_names  = retar_data[side]['actuated_dof_names']
+        wrist_names = [n for n in dof_names if 'forearm' in n]
+
+        # reconstruct flat (T, 22) and (T, 6) from settled joint_qpos dict
+        settled_hq = np.stack([jqpos_dict[n].cpu().numpy() for n in dof_names],  axis=1)  # (T, 22)
+        settled_wq = np.stack([jqpos_dict[n].cpu().numpy() for n in wrist_names], axis=1)  # (T, 6)
+
+        retar_data[side]['kpt_pos']        = robot_kpt.cpu().numpy().astype(np.float32)
+        retar_data[side]['kpt_vel']        = compute_velocity(robot_kpt, _dt).numpy().astype(np.float32)
+        retar_data[side]['hand_vel_qpos']  = compute_velocity(settled_hq, _dt).numpy().astype(np.float32)
+        retar_data[side]['wrist_vel_qpos'] = compute_velocity(settled_wq, _dt).numpy().astype(np.float64)
     if retargeter_save_fname is not None:
         np.save(retargeter_save_fname, retar_data)
         print(f"Re-saved retargeter data with robot kpt_pos to {retargeter_save_fname}")

@@ -244,6 +244,7 @@ class BaseRobot:
                     seen.add(name)
             print(f"[{self.name}] Deduped keypoint names: {len(raw_kpt_names)} → {len(link_names)} unique")
         
+        print("Side: ", self.name)           # get the hand side
         print("LINK NAMES: ", link_names)
         self.set_kpt_links(link_names)
 
@@ -679,6 +680,8 @@ class BaseRobot:
         self.kpt_vel = torch.zeros((self.num_envs, self.n_kpts, 3), dtype=torch.float32, device=self.device)
         self.wrist_pose = torch.zeros((self.num_envs, 7), dtype=torch.float32, device=self.device) # 4 for quat, 3 for pos
         self.control_forces = torch.zeros((self.num_envs, self.ndof), dtype=torch.float32, device=self.device)
+        # tracks envs that were teleported this step; their velocities should be zeroed
+        self.just_reset_mask = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
 
         # goal state from demo (set each step via set_goal_state)
         self.goal_wrist_pose    = torch.zeros((self.num_envs, 7),           dtype=torch.float32, device=self.device)
@@ -697,6 +700,11 @@ class BaseRobot:
         link_vel = entity.get_links_vel()
         self.kpt_pos[:] = link_pos[:, self.kpt_link_idxs, :]
         self.kpt_vel[:] = link_vel[:, self.kpt_link_idxs, :]
+        # zero velocity for envs that were teleported this step to suppress jump artifacts
+        if self.just_reset_mask.any():
+            self.kpt_vel[self.just_reset_mask] = 0.0
+            self.dof_vel[self.just_reset_mask] = 0.0
+            self.just_reset_mask[:] = False
         # self.contact_forces[:] = entity.get_links_net_contact_force()[:, self.coll_idxs_local, :]
         self.control_forces[:] = entity.get_dofs_control_force(self.actuated_dof_idxs)
         self.wrist_pose[:, :3] = link_pos[:, self.wrist_link_idx, :]
@@ -824,6 +832,7 @@ class BaseRobot:
                     episode_length_buf
                     )
                 res_qpos = self.residual_qpos[demo_t]
+                # print(res_qpos)
             self.curr_res_qpos[:] = res_qpos
             
         if self.action_mode == "residual":
@@ -910,18 +919,22 @@ class BaseRobot:
         if episode_start is not None:
             assert episode_start.shape[0] == len(env_idxs), f"episode_start.shape={episode_start.shape} != {len(env_idxs)}" 
         # reset value buffers 
-        if episode_start is not None and self.action_mode in ['residual', 'kinematic'] and self.residual_qpos is not None:
+        if episode_start is not None and self.action_mode in ['residual', 'kinematic']:
             if self.env_demo_idx is not None and self.all_residual_qpos is not None:
+                # multi-demo: index into per-demo trajectory at the correct start frame
                 demo_lengths = torch.tensor(self.all_residual_num_frames, device=self.device, dtype=episode_start.dtype)
                 per_env_len = demo_lengths[self.env_demo_idx[env_idxs]]
                 starts = torch.minimum(episode_start, per_env_len - 1)
                 init_qpos = self.all_residual_qpos[self.env_demo_idx[env_idxs], starts]
                 demo_ids = self.env_demo_idx[env_idxs]
-                self.residual_qpos = self.all_residual_qpos[demo_ids]       # setting the qpos for the enviornment to the demo
-                # self.residual_num_frames = self.all_residual_num_frames[demo_ids]   # setting the demo residual frames to the correct value
-                # print(f"[RESET {self.name}] env_idxs={list(env_idxs)[:4]} demo_ids={demo_ids[:4].tolist()} starts={starts[:4].tolist()} all_qpos_shape={self.all_residual_qpos.shape}")
-            else:
+                self.residual_qpos = self.all_residual_qpos[demo_ids]
+            elif self.residual_qpos is not None:
+                # single-demo
                 init_qpos = self.residual_qpos[episode_start]
+            elif self.env_demo_idx is not None and self.all_init_qpos is not None:
+                init_qpos = self.all_init_qpos[self.env_demo_idx[env_idxs]].float()
+            else:
+                init_qpos = self.init_qpos[env_idxs]
         elif self.env_demo_idx is not None and self.all_init_qpos is not None:
             init_qpos = self.all_init_qpos[self.env_demo_idx[env_idxs]].float()
         else:
@@ -955,9 +968,11 @@ class BaseRobot:
    
         # self.contact_forces[env_idxs, :] = 0.0
         self.control_forces[env_idxs, :] = 0.0
-        self.episode_length_buf[env_idxs] = 0 
+        self.episode_length_buf[env_idxs] = 0
         if episode_start is not None:
             self.episode_length_buf[env_idxs] = episode_start
+        # mark these envs as just teleported so update_value_buffers zeros their velocity
+        self.just_reset_mask[env_idxs] = True
         # self.episode_data = defaultdict(list) NOTE: only clear this after flush is called 
     
     def check_env_idxs(self, env_idxs):

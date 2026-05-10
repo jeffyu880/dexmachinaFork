@@ -77,8 +77,8 @@ for demo in "${demonstrations[@]}"; do
                 --control_steps "$CONTROL_STEPS" \
                 --save_name "$SAVE_NAME" \
                 --save \
-                --no_smoothing \
                 -ow 2>&1 | tee "$tmp_output"
+                # --no_smoothing \
 
             # for visualization of kinematic retargeting
             # python retargeting/parallel_retarget.py \
