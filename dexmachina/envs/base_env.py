@@ -668,18 +668,27 @@ class BaseEnv:
         assert actions.shape[0] == self.num_envs
         self.last_actions[:] = self.actions
         self.actions[:] = torch.clamp(actions, -self.action_clip, self.action_clip) * self.action_scale
+        # print("actions: ", self.actions)
+        
+        # left_robot = self.robots['left']
+        # if left_robot.residual_qpos is not None:
+        #     # clamped_idxs = torch.clamp(self.episode_length_buf, 0, left_robot.residual_num_frames - 1)
+        #     left_qpos_at_step = left_robot.residual_qpos[self.episode_length_buf].cpu()
+        #     print(f"left qpos at step: shape={left_qpos_at_step.shape}\n{left_qpos_at_step}")
         
         for k, robot in self.robots.items():
             idxs = self.action_idxs_to_robot[k]
             robot.step(self.actions[:, idxs], self._step_env_idxs)
         for k, obj in self.objects.items():
             obj.step()
-            
+        
         self.steps_since_reset += 1
         self.global_step += 1
         self.randomization.on_step(self.episode_length_buf)
         self.scene.step()  
         self.episode_length_buf += 1
+        # print("in base step: ", self.episode_length_buf)
+
         if self.env_demo_idx is not None:
             for d in self.env_demo_idx[self._step_env_idxs].tolist():
                 self.demo_step_counts[d] += 1
@@ -692,11 +701,15 @@ class BaseEnv:
         self.reset_terminated[:], self.reset_time_outs[:] = self._get_dones() 
         self.reset_buf[:] = self.reset_terminated | self.reset_time_outs
 
-        if not self.is_eval:
-            rew_dict = self._get_rewards()
+        rew_dict = self._get_rewards()
         if "log" not in self.extras:
             self.extras["log"] = dict() 
+            
+        # Debug: print residual_qpos at current episode length (clamp to valid indices)
 
+        # if self.episode_length_buf == 5:
+        #     exit()
+        
         # maniptrans curriculum checks additional early resets
         if isinstance(self.curriculum, ManipTransCurriculum) and self.n_objects == 1 and "keypoint_dist" in rew_dict:
             # get the object position and rotation error from rew_dict   
@@ -778,6 +791,24 @@ class BaseEnv:
         return self.obs_buf, None, self.rew_buf, self.reset_buf, self.extras
     
     def _get_rewards(self):
+        # --- index alignment check (remove after confirming) ---
+        # for side, robot in self.robots.items():
+        #     buf = self.episode_length_buf
+        #     if robot.all_residual_qpos is not None:
+        #         demo_idx = robot.env_demo_idx
+        #         qpos_traj = robot.all_residual_qpos[demo_idx, :]
+        #     elif robot.residual_qpos is not None:
+        #         qpos_traj = robot.residual_qpos.unsqueeze(0).expand(self.num_envs, -1, -1)
+        #     else:
+        #         continue
+        #     T = qpos_traj.shape[1]
+        #     at_t1 = qpos_traj[torch.arange(self.num_envs), buf.clamp(max=T-1)]
+        #     at_t  = qpos_traj[torch.arange(self.num_envs), (buf-1).clamp(min=0)]
+        #     err_t1 = (robot.curr_res_qpos - at_t1).abs().mean().item()
+        #     err_t  = (robot.curr_res_qpos - at_t ).abs().mean().item()
+        #     print(f"[{side}] curr_res_qpos vs demo[buf={buf[0].item()}]: err={err_t1:.5f}  vs demo[buf-1]: err={err_t:.5f}")
+
+        # --------------------------------------------------------
         if self.n_objects == 1:
             obj = self.objects[self.object_names[0]]
             obj_pos, obj_quat, obj_arti = obj.root_pos, obj.root_quat, obj.dof_pos
@@ -792,7 +823,7 @@ class BaseEnv:
             obj_arti=obj_arti,
             kpts_left=self.robots['left'].kpt_pos,
             kpts_right=self.robots['right'].kpt_pos,
-            episode_length_buf=self.episode_length_buf,
+            episode_length_buf=(self.episode_length_buf - 1).clamp(min=0),
             contact_link_pos_left=None,
             contact_link_valid_left=None,
             contact_link_pos_right=None,
@@ -812,7 +843,7 @@ class BaseEnv:
             reward_kwargs.update(
                 contact_forces=self.contact_forces
             )
-        rewards = -1
+        rewards = -1 * torch.ones(self.num_envs, device=self.device)
         # Use the dexMachina reward for training on 
         if not self.no_object:
             rewards, rew_dict = self.reward_module.compute_reward(**reward_kwargs)
@@ -821,23 +852,25 @@ class BaseEnv:
         else:
             running_progress_buf = self.episode_length_buf - self.episode_start_buf
             scale_factor = self.set_imitation_scale_factor()
+            # self.episode_length_buf = self.episode_length_buf - 1     # IS THIS NEEEDED? 
+            demo_t = (self.episode_length_buf - 1).clamp(min=0)
             reward, rew_dict = compute_no_obj_imitation_reward(
                 wrist_pose_left=self.robots['left'].wrist_pose,
                 wrist_pose_right=self.robots['right'].wrist_pose,
                 kpts_left=self.robots['left'].kpt_pos,
                 kpts_right=self.robots['right'].kpt_pos,
-                demo_wrist_left=self.reward_module.match_demo_state('wrist_pose_left', self.episode_length_buf),
-                demo_wrist_right=self.reward_module.match_demo_state('wrist_pose_right', self.episode_length_buf),
-                demo_kpts_left=self.reward_module.match_demo_state('kpts_left', self.episode_length_buf),
-                demo_kpts_right=self.reward_module.match_demo_state('kpts_right', self.episode_length_buf),
+                demo_wrist_left=self.reward_module.match_demo_state('wrist_pose_left', demo_t),
+                demo_wrist_right=self.reward_module.match_demo_state('wrist_pose_right', demo_t),
+                demo_kpts_left=self.reward_module.match_demo_state('kpts_left', demo_t),
+                demo_kpts_right=self.reward_module.match_demo_state('kpts_right', demo_t),
                 kpts_vel_left=self.robots['left'].kpt_vel,
                 kpts_vel_right=self.robots['right'].kpt_vel,
-                demo_kpts_vel_left=self.reward_module.match_demo_state('kpt_vel_left', self.episode_length_buf),
-                demo_kpts_vel_right=self.reward_module.match_demo_state('kpt_vel_right', self.episode_length_buf),
-                demo_wrist_vel_left=self.reward_module.match_demo_state('wrist_vel_left', self.episode_length_buf),
-                demo_wrist_vel_right=self.reward_module.match_demo_state('wrist_vel_right', self.episode_length_buf),
-                demo_wrist_ang_vel_left=self.reward_module.match_demo_state('wrist_ang_vel_left', self.episode_length_buf),
-                demo_wrist_ang_vel_right=self.reward_module.match_demo_state('wrist_ang_vel_right', self.episode_length_buf),
+                demo_kpts_vel_left=self.reward_module.match_demo_state('kpt_vel_left', demo_t),
+                demo_kpts_vel_right=self.reward_module.match_demo_state('kpt_vel_right', demo_t),
+                demo_wrist_vel_left=self.reward_module.match_demo_state('wrist_vel_left', demo_t),
+                demo_wrist_vel_right=self.reward_module.match_demo_state('wrist_vel_right', demo_t),
+                demo_wrist_ang_vel_left=self.reward_module.match_demo_state('wrist_ang_vel_left', demo_t),
+                demo_wrist_ang_vel_right=self.reward_module.match_demo_state('wrist_ang_vel_right', demo_t),
                 dof_vel_left=self.robots['left'].dof_vel,
                 dof_vel_right=self.robots['right'].dof_vel,
                 wrist_force_left=self.robots['left'].control_forces[:, :6],
@@ -853,9 +886,10 @@ class BaseEnv:
             if self.epoch_num >= 1000:
                 self.reset_buf[:]       = self.reset_buf | failed
                 self.reset_terminated[:] = self.reset_terminated | failed
+            # self.episode_length_buf = self.episode_length_buf + 1
 
         assert rew_dict is not None, "rew_dict is None! Reward computation failed."
-        assert rewards is not -1, "rewards are not computed correctly"
+        assert (rewards != -1).all(), "rewards are not computed correctly"
         
         if not self.use_rl_games:
             # scale the reward by 0.1 manually to match the scale in rl_games
@@ -898,10 +932,10 @@ class BaseEnv:
         stepped_length = self.episode_length_buf - self.episode_start_buf
         if self.chunk_ep_length > 0:
             # Chunked episodes: timeout is measured from episode_start_buf.
-            timeout = stepped_length >= self.chunk_ep_length
+            timeout = stepped_length >= self.chunk_ep_length - 1
         else:
             # Standard episodes: timeout at absolute episode length.
-            timeout = self.episode_length_buf >= self.max_episode_length  # returns true for end of episode
+            timeout = self.episode_length_buf >= self.max_episode_length - 1  # returns true for end of episode
  
         timeout = timeout | self.nan_envs
         if self.is_eval:

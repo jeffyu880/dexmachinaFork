@@ -307,9 +307,9 @@ class BaseRobot:
         # randomize observations
         self.randomize_observations = self.cfg.get("randomize_observations", False)
         if self.randomize_observations:
-            self.max_joint_angle_noise = 0.01 # radians
-            self.max_joint_pos_noise = 0.001 # meters
-            self.max_joint_vel_noise = 0.001 # meters/second
+            self.max_joint_angle_noise = 0.06 # radians ~ 5 degrees
+            self.max_joint_pos_noise = 0.0005 # meters   ~ mocap is sub milimeter error
+            self.max_joint_vel_noise = 0.002 # meters/second        # at assumed 1/30 fps mocap
 
         
         ### MULTI DEMO DATA STRUCTURES
@@ -318,7 +318,16 @@ class BaseRobot:
         self.all_init_qpos = torch.zeros(robot_cfg.get("num_demos", 1), qposes.shape[0], device=self.device, dtype=torch.float32)  # (num_demos, ndof)
         # self.all_dof_limits = torch.tensor(dof_limits, dtype=torch.float32, device=self.device)      # stores all joint limits for each demo   shape (ndemos, num_joints, 2), should be the same per demo
         # self.all_dof_range = self.dof_limits[:, 1] - self.dof_limits[:, 0] # shape (ndemos, num_joints,)
-    
+        # torch.set_printoptions(threshold=10000, linewidth=200, profile='full')
+        # print("\n" + "="*80)
+        # print("Robot:", self.name)
+        # if self.residual_qpos is not None:
+        #     print(f"Residual QPos Shape: {self.residual_qpos.shape} (T={self.residual_num_frames}, ndof={self.ndof})")
+        #     print(f"Residual QPos (all elements):\n{self.residual_qpos}")
+        # else:
+        #     print("Residual QPos: None")
+        # print("="*80 + "\n")
+        
     def get_collision_groups(self):
         return self.cfg.get("collision_groups", dict())
     
@@ -663,6 +672,9 @@ class BaseRobot:
             kp = group.get("kp", 200.0)
             kv = group.get("kv", 20.0)
             fr = group.get("force_range", 50.0)
+            print("group_name: ", group_name)
+            print("kp: ", kp)
+            print("kv: ", kv)
             self.set_joint_gains(kp, kv, fr, joint_idxs)
 
     def initialize_value_buffers(self):
@@ -820,16 +832,17 @@ class BaseRobot:
         upper_limit = self.dof_limits[:, 1] # shape (n_envs,)
         lower_limit = self.dof_limits[:, 0] # shape shape (n_envs,) 
         if self.residual_qpos is not None:
+            next_buf = episode_length_buf + 1
             if self.env_demo_idx is not None and self.all_residual_qpos is not None:
                 demo_lengths = torch.tensor(self.all_residual_num_frames, device=self.device, dtype=episode_length_buf.dtype)
                 per_env_len = demo_lengths[self.env_demo_idx]
-                demo_t = torch.minimum(episode_length_buf, per_env_len - 1)
+                demo_t = torch.minimum(next_buf, per_env_len - 1)
                 res_qpos = self.all_residual_qpos[self.env_demo_idx, demo_t]
             else:
                 demo_t = torch.where(
-                    episode_length_buf >= self.residual_num_frames,
+                    next_buf >= self.residual_num_frames,
                     self.residual_num_frames - 1,
-                    episode_length_buf
+                    next_buf
                     )
                 res_qpos = self.residual_qpos[demo_t]
                 # print(res_qpos)
@@ -931,13 +944,16 @@ class BaseRobot:
             elif self.residual_qpos is not None:
                 # single-demo
                 init_qpos = self.residual_qpos[episode_start]
-            elif self.env_demo_idx is not None and self.all_init_qpos is not None:
-                init_qpos = self.all_init_qpos[self.env_demo_idx[env_idxs]].float()
-            else:
-                init_qpos = self.init_qpos[env_idxs]
+                print("Init qpos: ", init_qpos)
+            # elif self.env_demo_idx is not None and self.all_init_qpos is not None:
+            #     init_qpos = self.all_init_qpos[self.env_demo_idx[env_idxs]].float()
+            # else:
+            #     init_qpos = self.init_qpos[env_idxs]
         elif self.env_demo_idx is not None and self.all_init_qpos is not None:
+            # multi-demo: index into per-demo trajectory at the correct start frame
             init_qpos = self.all_init_qpos[self.env_demo_idx[env_idxs]].float()
         else:
+            # single demo init
             init_qpos = self.init_qpos[env_idxs]
 
         self.dof_pos[env_idxs, :] = init_qpos

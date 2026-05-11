@@ -216,7 +216,7 @@ class Curriculum:
             reduce_gains = False
         else:
             achieved_len = np.mean(self.ep_lens)
-            if achieved_len < self.max_episode_length - 2:
+            if achieved_len < self.max_episode_length - 3:
                 reason += f"max achieved length: {achieved_len} too low"
                 reduce_gains = False
         return reduce_gains, reason 
