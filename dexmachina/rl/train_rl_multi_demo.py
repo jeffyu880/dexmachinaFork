@@ -314,7 +314,7 @@ def main():
             plot_pos_gt_timeseries, plot_wrist_vel_gt_timeseries, plot_fingertip_vel_gt,
             plot_wrist_gt, plot_3d_fingertip_trajectory,
         )
-        ep_len = base_env.max_episode_length
+        ep_len = base_env.max_episode_length - 1 # since the first ep length is now not counted toward the robot action (default set at init)
         hist_error_path   = os.path.join(ckpt_data_folder, "finger_tip_errors.png")         # hisotgram describing fingertip errors in bins
         vel_error_path    = os.path.join(ckpt_data_folder, "velocity_errors.png")           # line plot of velocity errors 
         fingertip_pos_path    = os.path.join(ckpt_data_folder, "position_timeseries.png")   # line plto of fingertip keypoint positoins

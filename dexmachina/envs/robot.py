@@ -832,17 +832,16 @@ class BaseRobot:
         upper_limit = self.dof_limits[:, 1] # shape (n_envs,)
         lower_limit = self.dof_limits[:, 0] # shape shape (n_envs,) 
         if self.residual_qpos is not None:
-            next_buf = episode_length_buf + 1
             if self.env_demo_idx is not None and self.all_residual_qpos is not None:
                 demo_lengths = torch.tensor(self.all_residual_num_frames, device=self.device, dtype=episode_length_buf.dtype)
                 per_env_len = demo_lengths[self.env_demo_idx]
-                demo_t = torch.minimum(next_buf, per_env_len - 1)
+                demo_t = torch.minimum(episode_length_buf, per_env_len - 1)
                 res_qpos = self.all_residual_qpos[self.env_demo_idx, demo_t]
             else:
                 demo_t = torch.where(
-                    next_buf >= self.residual_num_frames,
+                    episode_length_buf >= self.residual_num_frames,
                     self.residual_num_frames - 1,
-                    next_buf
+                    episode_length_buf
                     )
                 res_qpos = self.residual_qpos[demo_t]
                 # print(res_qpos)
@@ -944,7 +943,7 @@ class BaseRobot:
             elif self.residual_qpos is not None:
                 # single-demo
                 init_qpos = self.residual_qpos[episode_start]
-                print("Init qpos: ", init_qpos)
+                # print("Init qpos: ", init_qpos)
             # elif self.env_demo_idx is not None and self.all_init_qpos is not None:
             #     init_qpos = self.all_init_qpos[self.env_demo_idx[env_idxs]].float()
             # else:

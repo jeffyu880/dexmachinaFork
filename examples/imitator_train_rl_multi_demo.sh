@@ -38,11 +38,11 @@ declare -A PARAMS=(
     [training]="--skip_grad --deque_len 20 --save_freq 500 --use_retarget_contact --vis"
     [arm_model]="-am kinematic --hybrid_scales 0.1 1.0 --kp_init 80 --kv_init 5"
     [weights]="-imi 0.2 -bc 0.2 -con 0.0 -ert 0.0"
-    [experiment]="-exp imitation"
+    [experiment]="-exp imitation_huge_gains"
     [hand]="--hand allegro_hand"
     [seed]="--seed 24"
     [no_object]="-no_obj"                           # only do hand mimicing 
-    [randomization]="--rand_init_ratio 0.5"         # start the training 50% of the time from a random frame
+    # [randomization]="--rand_init_ratio 0.5"         # start the training 50% of the time from a random frame
     # [retarget]='--use_ik_retarget'          # use just IK kinematic retargeting
     # [sampling]="--demo_sampling deterministic"
     # [randomization]="-rand_obs"         # rand_obs is randomizing observations into the robot and object policy
@@ -68,7 +68,7 @@ declare -A PARAMS=(
 
 DEMOS=(
     "ketchup-20-120-s01-u01"            # DONT START FROM STEP 0
-    # "ketchup-0-500-s01-u02"
+    # "ketchup-20-120-s01-u02"
     # "ketchup-0-500-s04-u02"
     # "ketchup-0-500-s05-u01"
     # "ketchup-0-500-s06-u01"

@@ -176,14 +176,62 @@ def find_joints_in_group(entity, exprs):
         breakpoint()
     return names, idxs, all_act_idxs
             
-def interpolate_gain_val(vals, num_iters, num_joints, multiplier=1):
+def interpolate_gain_val(vals, num_iters, num_joints, multiplier=1, log_space=False):
     assert len(vals) == 2, "Need upper and lower bounds"
-    _interp = np.linspace(vals[0], vals[1], num_iters) 
+    if log_space and vals[0] > 0 and vals[1] > 0:
+        _interp = np.logspace(np.log10(vals[0]), np.log10(vals[1]), num_iters)
+    else:
+        _interp = np.linspace(vals[0], vals[1], num_iters)
     exp_mult = [multiplier**i for i in range(num_iters)]
     _interp = _interp * exp_mult
-    # repeat for all joints to get shape (num_envs, num_joints)
     interp = np.repeat(_interp[:, None], num_joints, axis=1)
     return torch.tensor(interp, dtype=torch.float32)
+
+
+def plot_position_tracking(actual_pos, target_pos, joint_names, kp, kv, fr, side='right',
+                           wrist_rot_actual=None, wrist_rot_target=None):
+    import matplotlib.pyplot as plt
+    actual = np.array(actual_pos)   # (T, n_joints)
+    target = np.array(target_pos)   # (T, n_joints)
+    n_joints = actual.shape[1]
+
+    has_rot = wrist_rot_actual is not None and len(wrist_rot_actual) > 0
+    rot_actual = np.array(wrist_rot_actual) if has_rot else None   # (T, 3)
+    rot_target = np.array(wrist_rot_target) if has_rot else None
+
+    rot_names = ['roll', 'pitch', 'yaw']
+    n_rot = 3 if has_rot else 0
+    total = n_joints + n_rot
+    cols = min(4, total)
+    rows = int(np.ceil(total / cols))
+    fig, axes = plt.subplots(rows, cols, figsize=(4 * cols, 3 * rows))
+    axes = np.array(axes).flatten() if total > 1 else [axes]
+    fig.suptitle(f"{side} | kp={kp:.1f}  kv={kv:.1f}  fr={fr:.1f}", fontsize=11)
+
+    for i in range(n_joints):
+        ax = axes[i]
+        ax.plot(target[:, i], label='target', linestyle='--', alpha=0.7)
+        ax.plot(actual[:, i], label='actual', alpha=0.9)
+        ax.set_title(joint_names[i] if i < len(joint_names) else f"joint {i}", fontsize=8)
+        ax.set_ylabel('rad', fontsize=7)
+        ax.legend(fontsize=7)
+        ax.grid(True, alpha=0.3)
+
+    if has_rot:
+        for j in range(3):
+            ax = axes[n_joints + j]
+            ax.plot(rot_target[:, j], label='target', linestyle='--', alpha=0.7, color='darkorange')
+            ax.plot(rot_actual[:, j], label='actual', alpha=0.9, color='steelblue')
+            ax.set_title(f"wrist {rot_names[j]}", fontsize=8)
+            ax.set_ylabel('rad', fontsize=7)
+            ax.legend(fontsize=7)
+            ax.grid(True, alpha=0.3)
+
+    for ax in axes[total:]:
+        ax.set_visible(False)
+    plt.tight_layout()
+    plt.show(block=False)
+    plt.pause(0.1)
 
 def set_joint_gains(args, hand_entities, dof_idxs, kp, kv, fr, env_idxs=None):
     # interpolate the hand joints
@@ -299,23 +347,29 @@ def main(args):
     num_joints = len(tuned_dof_idxs['left'])
     num_steps = len(retar_data['left']['hand_qpos'])
     kp = interpolate_gain_val(args.kp, args.num_iters, num_joints)
-    kv = interpolate_gain_val(args.kv, args.num_iters, num_joints, multiplier=args.kv_multiplier)
+    kv = interpolate_gain_val(args.kv, args.num_iters, num_joints, multiplier=args.kv_multiplier, log_space=args.log_kv)
     fr = interpolate_gain_val(args.force_range, args.num_iters, num_joints) 
     frames = []
     init_step = 0 
     if args.step_response:
         init_step = 20 # try setting to more midair step
         assert args.target_tstep < num_steps, "Target time step should be less than total steps"
+    plot_side = 'right'
+    tuned_joint_names, _, _ = find_joints_in_group(hand_entities[plot_side], hand_cfg[plot_side]['actuators'][args.joint_group]['joint_exprs'])
+    wrist_rot_exprs = hand_cfg[plot_side]['actuators']['wrist_rot']['joint_exprs']
+    _, wrist_rot_idxs, _ = find_joints_in_group(hand_entities[plot_side], wrist_rot_exprs)
     for itr in range(args.num_iters):
-        print(f"Iteration {itr+1}/{args.num_iters}") 
+        print(f"Iteration {itr+1}/{args.num_iters}")
         print(f"Gains: kp={kp[itr]}, kv={kv[itr]}, force_range={fr[itr]}")
         set_joint_gains(args, hand_entities, tuned_dof_idxs, kp[itr], kv[itr], fr[itr])
         control_set_hand_to_step(
             hand_entities, all_act_idxs, tuned_dof_idxs, init_step,
-            retar_data, init_step, device, 
+            retar_data, init_step, device,
             env_idxs=reference_env_idxs+main_env_idxs,
             control_joints=False,
             )
+        actual_pos, target_pos = [], []
+        wrist_rot_actual, wrist_rot_target = [], []
         for step in range(0, num_steps, args.step_interp):
             if args.step_response:
                 t = args.target_tstep
@@ -323,7 +377,7 @@ def main(args):
             else:
                 t = step
                 init_t = step # show the full traj!
-            
+
             control_set_hand_to_step(
                 hand_entities, all_act_idxs, tuned_dof_idxs, init_t,
                 retar_data, t, device, env_idxs=reference_env_idxs, control_joints=False
@@ -334,19 +388,32 @@ def main(args):
                 )
             scene.step()
             side = 'right'
+            actual = hand_entities[side].get_dofs_position(dofs_idx_local=tuned_dof_idxs[side])[0]
+            actual_pos.append(actual.cpu().numpy())
+            tgt_qpos = retar_data[side]['hand_qpos'][t]
+            tgt = np.array([tgt_qpos[all_act_idxs[side].index(idx)] for idx in tuned_dof_idxs[side] if idx in all_act_idxs[side]])
+            target_pos.append(tgt)
+            # wrist rotation: actual from entity, target from wrist_qpos[3:6] (roll/pitch/yaw)
+            rot_actual = hand_entities[side].get_dofs_position(dofs_idx_local=wrist_rot_idxs)[0]
+            wrist_rot_actual.append(rot_actual.cpu().numpy())
+            wrist_rot_target.append(np.array(retar_data[side]['wrist_qpos'][t][3:6], dtype=np.float32))
             control_force = hand_entities[side].get_dofs_control_force(dofs_idx_local=all_act_idxs[side])[0]
-            # round it to 2 decimal places
             control_force = np.round(control_force.cpu().numpy(), 1)
-            # only print if any is bigger than 10:
             if np.any(np.abs(control_force) > 100):
                 print(f"Control force: {control_force} for side {side}")
-            # control errors
-            # control_error = hand_entities[side].get_dofs_position() - 
-            # breakpoint()
 
             if args.record_video:
                 frame, _, _, _ = camera.render()
-                frames.append(frame)         
+                frames.append(frame)
+
+        if args.plot:
+            plot_position_tracking(
+                actual_pos, target_pos, tuned_joint_names,
+                kp=kp[itr][0].item(), kv=kv[itr][0].item(), fr=fr[itr][0].item(),
+                side=plot_side,
+                wrist_rot_actual=wrist_rot_actual,
+                wrist_rot_target=wrist_rot_target,
+            )         
         
         if not args.freespace and obj is not None:
             obj.set_object_state(
@@ -375,6 +442,7 @@ if __name__ == '__main__':
     parser.add_argument('--kp', type=float, nargs='+', default=[1.0, 10.0]) 
     parser.add_argument('--kv', type=float, nargs='+', default=[0.1, 1.0])
     parser.add_argument('--kv_multiplier', type=float, default=1.0)
+    parser.add_argument('--log_kv', action='store_true', help='Use log-spaced kv values instead of linear')
     parser.add_argument('--force_range', '-fr', type=float, nargs='+', default=[100.0, 100.0])
     parser.add_argument('--joint_group', type=str, default='wrist_trans')
     parser.add_argument('--spacing', type=float, default=0.0)
@@ -385,5 +453,6 @@ if __name__ == '__main__':
     # step_response is true, set the target time step
     parser.add_argument('--target_tstep', type=int, default=50)
     parser.add_argument('--skip_object', action='store_true')
-    args = parser.parse_args() 
+    parser.add_argument('--plot', action='store_true', help='Plot actual vs target joint positions after each iteration')
+    args = parser.parse_args()
     main(args)

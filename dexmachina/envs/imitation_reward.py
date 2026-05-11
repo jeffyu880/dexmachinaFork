@@ -485,21 +485,21 @@ def _hand_reward(
         # if error_buf.any():
         #     print(f"[error_buf] {error_buf.sum().item()} envs hit velocity/force limits")
 
-        failed_execute = (
-            (
-                (diff_thumb_tip_pos_dist  > 0.04  / 0.7 * scale_factor)
-                | (diff_index_tip_pos_dist  > 0.045 / 0.7 * scale_factor)
-                | (diff_middle_tip_pos_dist > 0.05  / 0.7 * scale_factor)
-                | (diff_pinky_tip_pos_dist  > 0.06  / 0.7 * scale_factor)
-                | (diff_ring_tip_pos_dist   > 0.06  / 0.7 * scale_factor)
-                | (diff_level_1_pos_dist    > 0.07  / 0.7 * scale_factor)
-                | (diff_level_2_pos_dist    > 0.08  / 0.7 * scale_factor)
-            ) & (running_progress_buf >= 20)
-        )
-        if failed_execute.any():
-            print(f"[failed_execute] {failed_execute.sum().item()} envs failed (large displacement)")
+        # failed_execute = (
+        #     (
+        #         (diff_thumb_tip_pos_dist  > 0.04  / 0.7 * scale_factor)
+        #         | (diff_index_tip_pos_dist  > 0.045 / 0.7 * scale_factor)
+        #         | (diff_middle_tip_pos_dist > 0.05  / 0.7 * scale_factor)
+        #         | (diff_pinky_tip_pos_dist  > 0.06  / 0.7 * scale_factor)
+        #         | (diff_ring_tip_pos_dist   > 0.06  / 0.7 * scale_factor)
+        #         | (diff_level_1_pos_dist    > 0.07  / 0.7 * scale_factor)
+        #         | (diff_level_2_pos_dist    > 0.08  / 0.7 * scale_factor)
+        #     ) & (running_progress_buf >= 20)
+        # )
+        # if failed_execute.any():
+        #     print(f"[failed_execute] {failed_execute.sum().item()} envs failed (large displacement)")
         
-        failed_execute = failed_execute| error_buf
+        # failed_execute = failed_execute| error_buf
 
         # ── weighted reward sum ──────────────────────────────────────────
         hand_reward = (
@@ -547,7 +547,7 @@ def _hand_reward(
             ),
         }
 
-        return hand_reward, failed_execute, reward_dict
+        return hand_reward, error_buf, reward_dict
 
 # retargeter_results: dict
 #   left/right: dict

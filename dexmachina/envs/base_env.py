@@ -395,7 +395,7 @@ class BaseEnv:
             print("Scene created but not built yet") 
             
         self.steps_since_reset = 0;
-        self.debug_plot = True
+        self.debug_plot = False
             
     def build_scene(self):
         env_cfg = self.env_cfg
