@@ -367,8 +367,8 @@ def _hand_reward(
         #     print(f"  kpts[{i}]:      robot={kpts[0, i].cpu().numpy().round(3)}  demo={demo_kpts[0, i].cpu().numpy().round(3)}  diff={float((kpts[0,i]-demo_kpts[0,i]).norm()):.4f}")
         diff_wrist_pos = torch.norm(demo_wrist[:, :3] - wrist_pose[:, :3], dim=-1)
         diff_wrist_rot = rotation_distance(wrist_pose[:, 3:], demo_wrist[:, 3:])
-        for i in range(len(running_progress_buf)):
-            print(f"    env{i}: step={running_progress_buf[i].item():3d}  rot_err={diff_wrist_rot[i].item():.4f} rad  pos_err={diff_wrist_pos[i].item():.4f}")
+        # for i in range(len(running_progress_buf)):
+            # print(f"    env{i}: step={running_progress_buf[i].item():3d}  rot_err={diff_wrist_rot[i].item():.4f} rad  pos_err={diff_wrist_pos[i].item():.4f}")
 
         # ── keypoint positions ───────────────────────────────────────────
         diff_kpts_dist = torch.norm(demo_kpts - kpts, dim=-1)   # (N, n_kpts)

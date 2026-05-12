@@ -74,7 +74,7 @@ params:
     e_clip: 0.2
     horizon_length: 32
     minibatch_size:  2048 #16384 # 32768 # 16384 # 32768 # 16384 # 65536 # 32768 # 1024 for num_envs=128  # 8192 for num_envs=1024
-    mini_epochs: 5
+    mini_epochs: 2
     critic_coef: 4
     clip_value: True
     seq_length: 4

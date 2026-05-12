@@ -24,7 +24,7 @@ ENV_SPACING=(1.0, 1.0)
 
 
 def get_scene_cfg(
-    dt=1/60, 
+    dt=1/30, 
     zero_gravity=False, 
     show_viewer=False, 
     show_fps=False, 
@@ -38,7 +38,7 @@ def get_scene_cfg(
     scene_cfg = dict(
         sim_options=gs.options.SimOptions(
             dt=dt,
-            substeps=2,
+            substeps=4,
             gravity=(0, 0, -9.81) if not zero_gravity else (0, 0, 0),
             #  gravity=(0, 0, 0),
         ), 
@@ -752,6 +752,14 @@ class BaseEnv:
             self.per_demo_ep_lengths.zero_()
             self.per_demo_ep_counts.zero_()
 
+        # Replace per-step snapshots with episode means for envs that just finished.
+        if hasattr(self, '_rew_accum') and len(reset_env_ids) > 0:
+            steps = self._rew_accum_steps[reset_env_ids].clamp(min=1)
+            for k in self._rew_accum:
+                rew_dict[k] = rew_dict[k].clone()
+                rew_dict[k][reset_env_ids] = self._rew_accum[k][reset_env_ids] / steps
+                self._rew_accum[k][reset_env_ids] = 0.0
+            self._rew_accum_steps[reset_env_ids] = 0.0
         self.extras["log"].update(rew_dict)
         self.extras["log"]["no_object"] = self.no_object
         if self.use_curriculum:
@@ -926,6 +934,17 @@ class BaseEnv:
                 self.per_demo_imi_rew.scatter_add_(0, self.env_demo_idx, imi_rew)
             if 'bc_rew' in rew_dict:
                 self.per_demo_bc_rew.scatter_add_(0, self.env_demo_idx, bc_rew)
+        # Accumulate per-env reward components for episode-mean logging.
+        if not hasattr(self, '_rew_accum'):
+            self._rew_accum = {
+                k: torch.zeros(self.num_envs, device=self.device)
+                for k, v in rew_dict.items()
+                if isinstance(v, torch.Tensor) and v.shape == torch.Size([self.num_envs])
+            }
+            self._rew_accum_steps = torch.zeros(self.num_envs, device=self.device)
+        for k in self._rew_accum:
+            self._rew_accum[k] += rew_dict[k]
+        self._rew_accum_steps += 1
         return rew_dict
 
     def _get_dones(self):
