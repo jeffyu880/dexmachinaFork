@@ -713,10 +713,10 @@ class BaseRobot:
         self.kpt_pos[:] = link_pos[:, self.kpt_link_idxs, :]
         self.kpt_vel[:] = link_vel[:, self.kpt_link_idxs, :]
         # zero velocity for envs that were teleported this step to suppress jump artifacts
-        if self.just_reset_mask.any():
-            self.kpt_vel[self.just_reset_mask] = 0.0
-            self.dof_vel[self.just_reset_mask] = 0.0
-            self.just_reset_mask[:] = False
+        # if self.just_reset_mask.any():
+        #     self.kpt_vel[self.just_reset_mask] = 0.0
+        #     self.dof_vel[self.just_reset_mask] = 0.0
+        #     self.just_reset_mask[:] = False
         # self.contact_forces[:] = entity.get_links_net_contact_force()[:, self.coll_idxs_local, :]
         self.control_forces[:] = entity.get_dofs_control_force(self.actuated_dof_idxs)
         self.wrist_pose[:, :3] = link_pos[:, self.wrist_link_idx, :]
@@ -986,8 +986,8 @@ class BaseRobot:
         self.episode_length_buf[env_idxs] = 0
         if episode_start is not None:
             self.episode_length_buf[env_idxs] = episode_start
-        # mark these envs as just teleported so update_value_buffers zeros their velocity
-        self.just_reset_mask[env_idxs] = True
+        # # mark these envs as just teleported so update_value_buffers zeros their velocity
+        # self.just_reset_mask[env_idxs] = True
         # self.episode_data = defaultdict(list) NOTE: only clear this after flush is called 
     
     def check_env_idxs(self, env_idxs):
