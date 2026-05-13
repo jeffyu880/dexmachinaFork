@@ -47,6 +47,7 @@ params:
     env_name: rlgpu
     device: 'cuda:0'
     device_name: 'cuda:0'
+    no_improve_patience: 1500
     multi_gpu: False
     ppo: True
     mixed_precision: False
