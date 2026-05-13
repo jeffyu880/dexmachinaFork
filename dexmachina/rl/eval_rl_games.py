@@ -534,7 +534,7 @@ def main():
         render_dir = ckpt_data_folder
         # render_dir = os.path.join(ckpt_data_folder, run_name)
         # print('Saving video to a different folder')
-        video_fname = os.path.join(ckpt_data_folder, ckpt_name)
+        video_fname = os.path.join(ckpt_data_folder, ckpt_name.replace(".pth", ".mp4"))
         os.makedirs(ckpt_data_folder, exist_ok=True)
 
     assert os.path.exists(saved_cfg_fname), f"File {saved_cfg_fname} does not exist"
@@ -811,16 +811,16 @@ def main():
                 return obj
 
             pkl_data = to_cpu({
-                'policy_obj_state': eval_data['obj_state'],
+                **(({'policy_obj_state': eval_data['obj_state']}) if 'obj_state' in eval_data else {}),
                 'policy_left_hand': {k.removeprefix('left_hand_'): v
                                       for k, v in eval_data.items() if k.startswith('left_hand_')},
                 'policy_right_hand': {k.removeprefix('right_hand_'): v
                                        for k, v in eval_data.items() if k.startswith('right_hand_')},
                 'demo_obj': env_kwargs['demo_data'],
                 'demo_robot': env_kwargs.get('retarget_data', {}),
-                'demo_state': eval_data['demo_state'],
+                **(({'demo_state': eval_data['demo_state']}) if 'demo_state' in eval_data else {}),
             })
-            pkl_fname = os.path.join(ckpt_eval_fname, ".pkl")
+            pkl_fname = ckpt_eval_fname + ".pkl"
             with open(pkl_fname, 'wb') as f:
                 pickle.dump(pkl_data, f)
             print(f"Saved pkl data to {pkl_fname}")
