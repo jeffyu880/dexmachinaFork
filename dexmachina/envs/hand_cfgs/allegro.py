@@ -47,14 +47,14 @@ ALLEGRO_LEFT_CFG={
     "actuators": {
         "finger": dict(
             joint_exprs=['.*.0.+'],
-            kp=100.0,
-            kv=6.0,
+            kp=30.0,
+            kv=2.0,
             force_range=100.0,
         ),
         "wrist_rot": dict(
             joint_exprs=[r'[LR]_forearm_(roll|pitch|yaw)_link_joint'],
-            kp=600,
-            kv=40.0,
+            kp=60,
+            kv=5.0,
             force_range=100.0,
         ),
         "wrist_trans": dict(
