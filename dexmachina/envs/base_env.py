@@ -762,7 +762,8 @@ class BaseEnv:
             steps = self._rew_accum_steps[reset_env_ids].clamp(min=1)
             for k in self._rew_accum:
                 rew_dict[k] = rew_dict[k].clone()
-                rew_dict[k][reset_env_ids] = self._rew_accum[k][reset_env_ids] / steps
+                # Convert to float for assignment to ensure dtype compatibility
+                rew_dict[k][reset_env_ids] = (self._rew_accum[k][reset_env_ids] / steps).float()
                 self._rew_accum[k][reset_env_ids] = 0.0
             self._rew_accum_steps[reset_env_ids] = 0.0
         self.extras["log"].update(rew_dict)
@@ -940,13 +941,13 @@ class BaseEnv:
         # Accumulate per-env reward components for episode-mean logging.
         if not hasattr(self, '_rew_accum'):
             self._rew_accum = {
-                k: torch.zeros(self.num_envs, device=self.device)
+                k: torch.zeros(self.num_envs, device=self.device, dtype=torch.float32)
                 for k, v in rew_dict.items()
-                if isinstance(v, torch.Tensor) and v.shape == torch.Size([self.num_envs])
+                if isinstance(v, torch.Tensor) and v.shape == torch.Size([self.num_envs]) and v.dtype in [torch.float32, torch.float64]
             }
             self._rew_accum_steps = torch.zeros(self.num_envs, device=self.device)
         for k in self._rew_accum:
-            self._rew_accum[k] += rew_dict[k]
+            self._rew_accum[k] += rew_dict[k].float()
         self._rew_accum_steps += 1
         return rew_dict
 
