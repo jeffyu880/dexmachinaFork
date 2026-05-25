@@ -27,7 +27,26 @@ declare -A PARAMS=(
     # [randomization]="--use_rand --rand_friction --rand_com --rand_mass"
     # [checkpoint]="--checkpoint /path/to/your/checkpoint.pth"
     [residual_cap]="--res_cap"      # cap the max displacement and rotation away from inital pose for wrist
-    [action_smoothing]="--action_moving_avg 0.8"    # the most recent action is a combination of the current and the previous 
+    # [action_smoothing]="--action_moving_avg 0.8"    # the most recent action is a combination of the current and the previous 
+)
+
+DEMOS=(
+    "ketchup-30-130-s01-u01"            # DONT START FROM STEP 0
+    # "ketchup-20-120-s01-u02"
+    # "ketchup-0-500-s04-u02"
+    # "ketchup-0-500-s05-u01"
+    # "ketchup-0-500-s06-u01"
+    # "ketchup-0-500-s06-u02"
+    # "ketchup-0-500-s07-u02"
+    # "ketchup-0-500-s08-u01"
+    # "ketchup-0-500-s08-u02"
+    # "ketchup-0-500-s08-u04"
+    # "ketchup-0-500-s09-u01"
+    # # "ketchup-0-500-s09-u02"
+    # "ketchup-0-500-s09-u03"
+    # "ketchup-0-500-s09-u04"
+    # "ketchup-0-500-s10-u01"
+    # "ketchup-0-500-s10-u02"
 )
 
 # Build the training command once so we can log and execute the exact same args.

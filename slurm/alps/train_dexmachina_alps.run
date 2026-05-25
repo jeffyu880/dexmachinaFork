@@ -14,4 +14,4 @@
 echo "Starting dexmachina training on $HOSTNAME"
 source /users/jsyu/miniconda3/etc/profile.d/conda.sh
 conda activate dexmachina-5
-bash examples/train_rl_allegro.sh 
+bash examples/alps_train_rl_allegro_ketchup.sh 
