@@ -4,8 +4,7 @@ MAX_ATTEMPTS=20
 RETRY_DELAY=15
 # retarget_name is either para or pure_ik_para
 
-CK=/home/jeffrey/Documents/Manipulation/Genesis/dexmachina/logs/rl_games/allegro_hand/ketchup_maniptrans_imitation_0508_222601/nn/last_allegro_hand_ep_4000_rew_21.910967.pth
-for attempt in $(seq 1 $MAX_ATTEMPTS); do
+CK=/home/jeffrey/Documents/Manipulation/Genesis/dexmachina/izar_logs/rl_games/allegro_hand/allegro-new_obs_residual0424_171847_ketchup40-140-s02-u01_B11000_residual_thres0.5_ho32_imi0.2_con2.0_bc0.2/nn/last_allegro_hand_ep_4500_rew_85.38478.pth
     echo "[Attempt $attempt/$MAX_ATTEMPTS] Running eval script..."
     python dexmachina/rl/eval_rl_games.py \
         -B 1 \
@@ -18,7 +17,8 @@ for attempt in $(seq 1 $MAX_ATTEMPTS); do
         --camera_angle isometric \
         --record_video \
         -di 0 \
-        --retarget_type pure_ik_para
+        --retarget_type pure_ik_para \
+        --save_traj
         # --reference_clip ketchup-30-130-s01-u01 \
         # --hand allegro_hand
     

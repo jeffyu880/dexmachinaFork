@@ -633,6 +633,7 @@ class BaseEnv:
             self._render_headless()
         return  
     
+    # not called
     def pre_scene_step(self, actions: torch.Tensor):
         """ call this for only stepping the robot/objects"""
         self.last_actions[:] = self.actions
@@ -676,9 +677,11 @@ class BaseEnv:
         #     left_qpos_at_step = left_robot.residual_qpos[self.episode_length_buf].cpu()
         #     print(f"left qpos at step: shape={left_qpos_at_step.shape}\n{left_qpos_at_step}")
         
+        # getting actions 
         for k, robot in self.robots.items():
             idxs = self.action_idxs_to_robot[k]
             robot.step(self.actions[:, idxs], self._step_env_idxs)
+        # steps the object forward in the demonstration (if actuated, adjusts some visualizations)
         for k, obj in self.objects.items():
             obj.step()
         
@@ -695,6 +698,8 @@ class BaseEnv:
         else:
             self.demo_step_counts[self.current_demo_idx] += len(self._step_env_idxs)
         # self.progress_episode_length() 
+        
+        # get the state of the robot and object (position, velocity of joints, keypoints...)
         self._compute_intermediate_values()
         
         # Determine which envs should reset this step.
@@ -831,7 +836,7 @@ class BaseEnv:
             obj_arti=obj_arti,
             kpts_left=self.robots['left'].kpt_pos,
             kpts_right=self.robots['right'].kpt_pos,
-            episode_length_buf=(self.episode_length_buf - 1).clamp(min=0),
+            episode_length_buf=self.episode_length_buf,
             contact_link_pos_left=None,
             contact_link_valid_left=None,
             contact_link_pos_right=None,
@@ -858,7 +863,6 @@ class BaseEnv:
 
         # use the maniptrans reward for the imitator model
         else:
-            running_progress_buf = self.episode_length_buf - self.episode_start_buf
             scale_factor = self.set_imitation_scale_factor()
             # self.episode_length_buf = self.episode_length_buf - 1     # IS THIS NEEEDED? 
             demo_t = (self.episode_length_buf - 1).clamp(min=0)
@@ -885,7 +889,6 @@ class BaseEnv:
                 wrist_force_right=self.robots['right'].control_forces[:, :6],
                 finger_force_left=self.robots['left'].control_forces[:, 6:],
                 finger_force_right=self.robots['right'].control_forces[:, 6:],
-                running_progress_buf=running_progress_buf,
                 scale_factor=scale_factor,
                 debug=self.debug_plot,
             )

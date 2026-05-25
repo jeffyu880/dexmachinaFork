@@ -274,7 +274,7 @@ def plot_3d_fingertip_trajectory(side="right", first_n=None, save_path=None):
     fig.suptitle(f"{side} hand — fingertip + wrist trajectory (robot vs demo)", fontsize=12)
 
     # static wrist paths
-    # ax.plot(*robot_wrist.T,    color='steelblue', alpha=0.2, linewidth=1, label='Robot wrist')
+    ax.plot(*robot_wrist.T,    color='steelblue', alpha=0.2, linewidth=1, label='Robot wrist')
     ax.plot(*demo_wrist_pos.T, color='darkorange', alpha=0.2, linewidth=1, label='Demo wrist')
 
     # dynamic scatter: fingertips (circle=robot, triangle=demo)
@@ -284,8 +284,8 @@ def plot_3d_fingertip_trajectory(side="right", first_n=None, save_path=None):
     demo_sc  = [ax.scatter(*demo_tips[0, i],  c=FINGER_COLORS[i], s=35, marker='^',
                             alpha=0.5, label=f'D {FINGER_NAMES[i]}', depthshade=False)
                 for i in range(4)]
-    # robot_wrist_sc = ax.scatter(*robot_wrist[0],    c='steelblue',  s=120, marker='*',
-    #                              label='R wrist', depthshade=False)
+    robot_wrist_sc = ax.scatter(*robot_wrist[0],    c='steelblue',  s=120, marker='*',
+                                 label='R wrist', depthshade=False)
     demo_wrist_sc  = ax.scatter(*demo_wrist_pos[0], c='darkorange', s=120, marker='*',
                                  label='D wrist', depthshade=False)
     quivers = [None, None]
@@ -306,7 +306,7 @@ def plot_3d_fingertip_trajectory(side="right", first_n=None, save_path=None):
             demo_sc[i]._offsets3d  = (demo_tips[t, i, :1],  demo_tips[t, i, 1:2],  demo_tips[t, i, 2:3])
         rw = robot_wrist[t]
         dw = demo_wrist_pos[t]
-        # robot_wrist_sc._offsets3d = ([rw[0]], [rw[1]], [rw[2]])
+        robot_wrist_sc._offsets3d = ([rw[0]], [rw[1]], [rw[2]])
         demo_wrist_sc._offsets3d  = ([dw[0]], [dw[1]], [dw[2]])
 
         for qi, (wp, wv, col) in enumerate([
@@ -609,7 +609,6 @@ def compute_no_obj_imitation_reward(
         demo_wrist_vel_left,
         demo_wrist_ang_vel_left,
         scale_factor,
-        running_progress_buf,
         ALLEGRO_LEFT_CFG['keypoint_idx'],
         wrist_force_left,
         finger_force_left,
@@ -627,7 +626,6 @@ def compute_no_obj_imitation_reward(
         demo_wrist_vel_right,
         demo_wrist_ang_vel_right,
         scale_factor,
-        running_progress_buf,
         ALLEGRO_RIGHT_CFG['keypoint_idx'],
         wrist_force_right,
         finger_force_right,

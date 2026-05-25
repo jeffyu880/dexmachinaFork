@@ -131,8 +131,9 @@ class BaseRobot:
         print("INITIAL ROTATION FOR ROBOT: ", self.init_quat)
 
         self.action_mode = robot_cfg.get("action_mode", "residual")
-        assert self.action_mode in ["residual", "absolute", "relative", "hybrid", "kinematic"], f"Invalid action mode {self.action_mode}"
+        assert self.action_mode in ["residual", "absolute", "relative", "hybrid", "kinematic", "delta"], f"Invalid action mode {self.action_mode}"
         self.hybrid_scales = robot_cfg.get("hybrid_scales", (0.04, 0.5))
+        self.delta_scale = robot_cfg.get("delta_scale", 0.3)
         self.res_cap = robot_cfg.get("res_cap", False)
         self.num_envs = num_envs
         self.scene = scene
@@ -876,6 +877,19 @@ class BaseRobot:
         elif self.action_mode == "absolute":
             joint_targets = lower_limit + (upper_limit - lower_limit) * (joint_actions + 1) / 2 # shape (n_envs, ndof)
         
+        elif self.action_mode == "delta": # symmetric delta around ground truth res_qpos for all joints
+            assert self.residual_qpos is not None and self.residual_num_frames is not None, "Residual qpos not set"
+            
+            scale_trans, scale_rot = self.hybrid_scales
+            wrist_trans = self.curr_res_qpos[:, self.wrist_dof_idxs[:3]] + scale_trans * wrist_actions[:, :3] # shape (n_envs, 3)
+            wrist_rot = self.curr_res_qpos[:, self.wrist_dof_idxs[3:]] + scale_rot * wrist_actions[:, 3:6] # shape (n_envs, 3)
+
+            finger_scale = 0.3
+            finger_actions = joint_actions[:, self.finger_dof_idxs]
+            finger_targets = res_qpos[:, self.finger_dof_idxs] + finger_scale * finger_actions
+            
+            joint_targets = torch.concatenate([wrist_trans, wrist_rot, finger_targets], dim=-1)  
+
         elif self.action_mode == "hybrid": # only residual on wrist joints, absolute on finger joints, use self.wrist_dof_idxs and self.finger_dof_idxs
             assert self.residual_qpos is not None and self.residual_num_frames is not None, "Residual qpos not set"
             # from objdex paper: wrist delta actions ±4 centimeters for transition and ±0.5 radian for rotation 
@@ -889,8 +903,7 @@ class BaseRobot:
             finger_actions = joint_actions[:, self.finger_dof_idxs]
             finger_targets = lower_limit[self.finger_dof_idxs] + (upper_limit[self.finger_dof_idxs] - lower_limit[self.finger_dof_idxs]) * (finger_actions + 1) / 2
             
-            joint_targets = torch.concatenate([wrist_trans, wrist_rot, finger_targets], dim=-1)
-            
+            joint_targets = torch.concatenate([wrist_trans, wrist_rot, finger_targets], dim=-1)           
         else:
             raise NotImplementedError  
         # ignore the mimic values!
@@ -1063,6 +1076,7 @@ class BaseRobot:
                 envs_idx=env_idxs
                 ) 
         # NOTE: step the scene in the main thread 
+        print("Robot episode: ", self.episode_length_buf)
         self.episode_length_buf += 1    
         return 
     
