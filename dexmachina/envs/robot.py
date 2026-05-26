@@ -1076,7 +1076,6 @@ class BaseRobot:
                 envs_idx=env_idxs
                 ) 
         # NOTE: step the scene in the main thread 
-        # print("Robot episode: ", self.episode_length_buf)
         self.episode_length_buf += 1    
         return 
     

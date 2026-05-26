@@ -138,6 +138,7 @@ def get_all_env_cfg(args, device, load_retarget_data=True):
         robot_cfgs[side]['action_mode'] = args.action_mode
         robot_cfgs[side]['hybrid_scales'] = tuple(args.hybrid_scales)
         robot_cfgs[side]['res_cap'] = args.res_cap
+        robot_cfgs[side]['action_moving_avg'] = args.action_moving_avg
         robot_cfgs[side]['show_keypoints'] = args.show_kpts
         if args.hide_hand:
             robot_cfgs[side]['visualization'] = False
@@ -366,6 +367,7 @@ def get_common_argparser():
     parser.add_argument('--solip_multiplier', '-solip', type=float, default=0.95)
     parser.add_argument('--resample_every_epoch', '-resample', type=int, default=-1)
     parser.add_argument('--skip_grad', action='store_true')
+    parser.add_argument('--action_moving_avg', type=float, default=1.0, help='Exponential moving average for action targets (1.0 = no smoothing)')
 
     parser.add_argument('--dialback_ep_len', type=int, default=30)
     parser.add_argument('--dialback_min_epochs', type=int, default=500)

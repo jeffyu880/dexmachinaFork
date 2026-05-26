@@ -38,36 +38,38 @@ declare -A PARAMS=(
     [training]="--skip_grad --deque_len 20 --save_freq 500 --use_retarget_contact"
     [arm_model]="-am residual --hybrid_scales 0.1 1.0 --kp_init 100 --kv_init 5"
     [weights]="-imi 0.2 -bc 0.2 -con 2.0 -ert 0.3"
-    [experiment]="-exp allegro-multi-demo"
+    [experiment]="-exp residual"
     [hand]="--hand allegro_hand"
     [seed]="--seed 24"
-    [no_object]="-no_obj"                           # only do hand mimicing 
+    # [no_object]="-no_obj"                           # only do hand mimicing 
     [randomization]="--rand_init_ratio 0.5"         # start the training 50% of the time from a random frame
     [retarget]='--use_ik_retarget'          # use just IK kinematic retargeting
     # [sampling]="--demo_sampling deterministic"
     # [randomization]="--use_rand --rand_friction --rand_com --rand_mass"
     # [checkpoint]="--checkpoint /path/to/your/checkpoint.pth"
+    [residual_cap]="--res_cap"      # cap the max displacement and rotation away from inital pose for wrist
+    # [action_smoothing]="--action_moving_avg 0.8"    # the most recent action is a combination of the current and the previous 
 )
 
 # Multiple demo clips for training.
 # Format: object-start-end[-subject][-use_clip]
 DEMOS=(
-    "ketchup-0-500-s01-u01"
-    "ketchup-0-500-s01-u02"
-    "ketchup-0-500-s04-u02"
-    "ketchup-0-500-s05-u01"
-    "ketchup-0-500-s06-u01"
-    "ketchup-0-500-s06-u02"
-    "ketchup-0-500-s07-u02"
-    "ketchup-0-500-s08-u01"
-    "ketchup-0-500-s08-u02"
-    "ketchup-0-500-s08-u04"
-    "ketchup-0-500-s09-u01"
-    # "ketchup-0-500-s09-u02"
-    "ketchup-0-500-s09-u03"
-    "ketchup-0-500-s09-u04"
-    "ketchup-0-500-s10-u01"
-    "ketchup-0-500-s10-u02"
+    "ketchup-30-130-s01-u01"
+    # "ketchup-0-500-s01-u02"
+    # "ketchup-0-500-s04-u02"
+    # "ketchup-0-500-s05-u01"
+    # "ketchup-0-500-s06-u01"
+    # "ketchup-0-500-s06-u02"
+    # "ketchup-0-500-s07-u02"
+    # "ketchup-0-500-s08-u01"
+    # "ketchup-0-500-s08-u02"
+    # "ketchup-0-500-s08-u04"
+    # "ketchup-0-500-s09-u01"
+    # # "ketchup-0-500-s09-u02"
+    # "ketchup-0-500-s09-u03"
+    # "ketchup-0-500-s09-u04"
+    # "ketchup-0-500-s10-u01"
+    # "ketchup-0-500-s10-u02"
 )
 
 # Build the training command once so we can log and execute the exact same args.
@@ -91,6 +93,7 @@ CMD=(
     ${PARAMS[randomization]}
     ${PARAMS[no_object]}
     ${PARAMS[retarget]}
+    ${PARAMS[residual_cap]}
     # ${PARAMS[checkpoint]}
     --clips "${DEMOS[@]}"
 )
