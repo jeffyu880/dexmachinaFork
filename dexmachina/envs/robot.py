@@ -854,12 +854,12 @@ class BaseRobot:
             # scale action to add to centering default init pos 
             upper_margin = upper_limit - res_qpos  # shape (n_envs, 1)
             lower_margin = res_qpos - lower_limit  # shape (n_envs, 1)
-            if self.res_cap:
-                scale_trans, scale_rot = self.hybrid_scales
-                upper_margin[:, self.wrist_dof_idxs[:3]] = scale_trans
-                upper_margin[:, self.wrist_dof_idxs[3:]] = scale_rot
-                lower_margin[:, self.wrist_dof_idxs[:3]] = -scale_trans
-                lower_margin[:, self.wrist_dof_idxs[3:]] = -scale_rot
+            # Always apply hybrid_scales limits to prevent unbounded wrist movements in residual mode
+            scale_trans, scale_rot = self.hybrid_scales
+            upper_margin[:, self.wrist_dof_idxs[:3]] = scale_trans
+            upper_margin[:, self.wrist_dof_idxs[3:]] = scale_rot
+            lower_margin[:, self.wrist_dof_idxs[:3]] = -scale_trans
+            lower_margin[:, self.wrist_dof_idxs[3:]] = -scale_rot
             # joint_actions is -1, 1, make it center around init_qpos
             upper = joint_actions >= 0 
             scaled = torch.where(upper, joint_actions * upper_margin, joint_actions * lower_margin) # joint_actions has sign +-1!!
@@ -1076,7 +1076,7 @@ class BaseRobot:
                 envs_idx=env_idxs
                 ) 
         # NOTE: step the scene in the main thread 
-        print("Robot episode: ", self.episode_length_buf)
+        # print("Robot episode: ", self.episode_length_buf)
         self.episode_length_buf += 1    
         return 
     

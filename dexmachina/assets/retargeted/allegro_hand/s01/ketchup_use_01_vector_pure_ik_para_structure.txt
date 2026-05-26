@@ -1,0 +1,265 @@
+
+=== FULL FILE STRUCTURE ===
+retarget_data: dict     : stores the pure IK retargeted results
+  left: dict
+    joint_qpos: dict
+      L_forearm_tx_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_ty_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_tz_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_roll_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_pitch_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_yaw_link_joint: Tensor shape=(600,) dtype=torch.float32
+      joint_0.0: Tensor shape=(600,) dtype=torch.float32
+      joint_4.0: Tensor shape=(600,) dtype=torch.float32
+      joint_8.0: Tensor shape=(600,) dtype=torch.float32
+      joint_12.0: Tensor shape=(600,) dtype=torch.float32
+      joint_1.0: Tensor shape=(600,) dtype=torch.float32
+      joint_5.0: Tensor shape=(600,) dtype=torch.float32
+      joint_9.0: Tensor shape=(600,) dtype=torch.float32
+      joint_13.0: Tensor shape=(600,) dtype=torch.float32
+      joint_2.0: Tensor shape=(600,) dtype=torch.float32
+      joint_6.0: Tensor shape=(600,) dtype=torch.float32
+      joint_10.0: Tensor shape=(600,) dtype=torch.float32
+      joint_14.0: Tensor shape=(600,) dtype=torch.float32
+      joint_3.0: Tensor shape=(600,) dtype=torch.float32
+      joint_7.0: Tensor shape=(600,) dtype=torch.float32
+      joint_11.0: Tensor shape=(600,) dtype=torch.float32
+      joint_15.0: Tensor shape=(600,) dtype=torch.float32
+    joint_targets: dict
+      L_forearm_tx_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_ty_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_tz_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_roll_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_pitch_link_joint: Tensor shape=(600,) dtype=torch.float32
+      L_forearm_yaw_link_joint: Tensor shape=(600,) dtype=torch.float32
+      joint_0.0: Tensor shape=(600,) dtype=torch.float32
+      joint_4.0: Tensor shape=(600,) dtype=torch.float32
+      joint_8.0: Tensor shape=(600,) dtype=torch.float32
+      joint_12.0: Tensor shape=(600,) dtype=torch.float32
+      joint_1.0: Tensor shape=(600,) dtype=torch.float32
+      joint_5.0: Tensor shape=(600,) dtype=torch.float32
+      joint_9.0: Tensor shape=(600,) dtype=torch.float32
+      joint_13.0: Tensor shape=(600,) dtype=torch.float32
+      joint_2.0: Tensor shape=(600,) dtype=torch.float32
+      joint_6.0: Tensor shape=(600,) dtype=torch.float32
+      joint_10.0: Tensor shape=(600,) dtype=torch.float32
+      joint_14.0: Tensor shape=(600,) dtype=torch.float32
+      joint_3.0: Tensor shape=(600,) dtype=torch.float32
+      joint_7.0: Tensor shape=(600,) dtype=torch.float32
+      joint_11.0: Tensor shape=(600,) dtype=torch.float32
+      joint_15.0: Tensor shape=(600,) dtype=torch.float32
+    kpt_pos: Tensor shape=(600, 25, 3) dtype=torch.float32
+    kpt_names: list len=25
+    wrist_pose: Tensor shape=(600, 7) dtype=torch.float32
+    wrist_link_name: str=base_dummy_link
+  right: dict
+    joint_qpos: dict
+      R_forearm_tx_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_ty_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_tz_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_roll_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_pitch_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_yaw_link_joint: Tensor shape=(600,) dtype=torch.float32
+      joint_0.0: Tensor shape=(600,) dtype=torch.float32
+      joint_4.0: Tensor shape=(600,) dtype=torch.float32
+      joint_8.0: Tensor shape=(600,) dtype=torch.float32
+      joint_12.0: Tensor shape=(600,) dtype=torch.float32
+      joint_1.0: Tensor shape=(600,) dtype=torch.float32
+      joint_5.0: Tensor shape=(600,) dtype=torch.float32
+      joint_9.0: Tensor shape=(600,) dtype=torch.float32
+      joint_13.0: Tensor shape=(600,) dtype=torch.float32
+      joint_2.0: Tensor shape=(600,) dtype=torch.float32
+      joint_6.0: Tensor shape=(600,) dtype=torch.float32
+      joint_10.0: Tensor shape=(600,) dtype=torch.float32
+      joint_14.0: Tensor shape=(600,) dtype=torch.float32
+      joint_3.0: Tensor shape=(600,) dtype=torch.float32
+      joint_7.0: Tensor shape=(600,) dtype=torch.float32
+      joint_11.0: Tensor shape=(600,) dtype=torch.float32
+      joint_15.0: Tensor shape=(600,) dtype=torch.float32
+    joint_targets: dict
+      R_forearm_tx_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_ty_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_tz_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_roll_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_pitch_link_joint: Tensor shape=(600,) dtype=torch.float32
+      R_forearm_yaw_link_joint: Tensor shape=(600,) dtype=torch.float32
+      joint_0.0: Tensor shape=(600,) dtype=torch.float32
+      joint_4.0: Tensor shape=(600,) dtype=torch.float32
+      joint_8.0: Tensor shape=(600,) dtype=torch.float32
+      joint_12.0: Tensor shape=(600,) dtype=torch.float32
+      joint_1.0: Tensor shape=(600,) dtype=torch.float32
+      joint_5.0: Tensor shape=(600,) dtype=torch.float32
+      joint_9.0: Tensor shape=(600,) dtype=torch.float32
+      joint_13.0: Tensor shape=(600,) dtype=torch.float32
+      joint_2.0: Tensor shape=(600,) dtype=torch.float32
+      joint_6.0: Tensor shape=(600,) dtype=torch.float32
+      joint_10.0: Tensor shape=(600,) dtype=torch.float32
+      joint_14.0: Tensor shape=(600,) dtype=torch.float32
+      joint_3.0: Tensor shape=(600,) dtype=torch.float32
+      joint_7.0: Tensor shape=(600,) dtype=torch.float32
+      joint_11.0: Tensor shape=(600,) dtype=torch.float32
+      joint_15.0: Tensor shape=(600,) dtype=torch.float32
+    kpt_pos: Tensor shape=(600, 25, 3) dtype=torch.float32
+    kpt_names: list len=25
+    wrist_pose: Tensor shape=(600, 7) dtype=torch.float32
+    wrist_link_name: str=base_dummy_link
+retargeter_results: dict
+  left: dict
+    hand_qpos: ndarray shape=(600, 22) dtype=float32
+    wrist_qpos: ndarray shape=(600, 6) dtype=float64
+    wrist_idxs: ndarray shape=(600, 6) dtype=int64
+    actuated_dof_names: list len=22
+    actuated_dof_idxs: list len=22
+    hand_vel_qpos: ndarray shape=(600, 22) dtype=float32
+    wrist_vel_qpos: ndarray shape=(600, 6) dtype=float64
+    kpt_pos: ndarray shape=(600, 25, 3) dtype=float32
+    kpt_vel: ndarray shape=(600, 25, 3) dtype=float32
+  right: dict
+    hand_qpos: ndarray shape=(600, 22) dtype=float32
+    wrist_qpos: ndarray shape=(600, 6) dtype=float64
+    wrist_idxs: ndarray shape=(600, 6) dtype=int64
+    actuated_dof_names: list len=22
+    actuated_dof_idxs: list len=22
+    hand_vel_qpos: ndarray shape=(600, 22) dtype=float32
+    wrist_vel_qpos: ndarray shape=(600, 6) dtype=float64
+    kpt_pos: ndarray shape=(600, 25, 3) dtype=float32
+    kpt_vel: ndarray shape=(600, 25, 3) dtype=float32
+demo_data: dict
+  obj_pos: ndarray shape=(600, 3) dtype=float32
+  obj_quat: ndarray shape=(600, 4) dtype=float32
+  obj_arti: ndarray shape=(600,) dtype=float32
+  contact_links_left: ndarray shape=(600, 16, 4) dtype=float64
+  contact_links_right: ndarray shape=(600, 16, 4) dtype=float64
+============================================================
+
+============================================================
+LEFT HAND
+============================================================
+
+Keypoint Names (len=25):
+   0: link_15.0_tip
+   1: link_11.0_tip
+   2: link_7.0_tip
+   3: link_3.0_tip
+   4: base_link
+   5: link_0.0
+   6: link_4.0
+   7: link_8.0
+   8: link_12.0
+   9: link_1.0
+  10: link_5.0
+  11: link_9.0
+  12: link_13.0
+  13: link_2.0
+  14: link_6.0
+  15: link_10.0
+  16: link_14.0
+  17: link_3.0
+  18: link_7.0
+  19: link_11.0
+  20: link_15.0
+  21: link_3.0_tip
+  22: link_7.0_tip
+  23: link_11.0_tip
+  24: link_15.0_tip
+
+DUPLICATES FOUND:
+  'link_15.0_tip' appears 2x at indices [0, 24]
+  'link_11.0_tip' appears 2x at indices [1, 23]
+  'link_7.0_tip' appears 2x at indices [2, 22]
+  'link_3.0_tip' appears 2x at indices [3, 21]
+
+Keypoint Positions shape: torch.Size([600, 25, 3])
+  Expected: (num_frames=600, num_keypoints=25, xyz=3)
+
+Wrist Link Name: base_dummy_link
+
+Joint Names in retargeting (len=22):
+   0: L_forearm_tx_link_joint
+   1: L_forearm_ty_link_joint
+   2: L_forearm_tz_link_joint
+   3: L_forearm_roll_link_joint
+   4: L_forearm_pitch_link_joint
+   5: L_forearm_yaw_link_joint
+   6: joint_0.0
+   7: joint_4.0
+   8: joint_8.0
+   9: joint_12.0
+  10: joint_1.0
+  11: joint_5.0
+  12: joint_9.0
+  13: joint_13.0
+  14: joint_2.0
+  15: joint_6.0
+  16: joint_10.0
+  17: joint_14.0
+  18: joint_3.0
+  19: joint_7.0
+  20: joint_11.0
+  21: joint_15.0
+
+============================================================
+RIGHT HAND
+============================================================
+
+Keypoint Names (len=25):
+   0: link_15.0_tip
+   1: link_3.0_tip
+   2: link_7.0_tip
+   3: link_11.0_tip
+   4: base_link
+   5: link_0.0
+   6: link_4.0
+   7: link_8.0
+   8: link_12.0
+   9: link_1.0
+  10: link_5.0
+  11: link_9.0
+  12: link_13.0
+  13: link_2.0
+  14: link_6.0
+  15: link_10.0
+  16: link_14.0
+  17: link_3.0
+  18: link_7.0
+  19: link_11.0
+  20: link_15.0
+  21: link_3.0_tip
+  22: link_7.0_tip
+  23: link_11.0_tip
+  24: link_15.0_tip
+
+DUPLICATES FOUND:
+  'link_15.0_tip' appears 2x at indices [0, 24]
+  'link_3.0_tip' appears 2x at indices [1, 21]
+  'link_7.0_tip' appears 2x at indices [2, 22]
+  'link_11.0_tip' appears 2x at indices [3, 23]
+
+Keypoint Positions shape: torch.Size([600, 25, 3])
+  Expected: (num_frames=600, num_keypoints=25, xyz=3)
+
+Wrist Link Name: base_dummy_link
+
+Joint Names in retargeting (len=22):
+   0: R_forearm_tx_link_joint
+   1: R_forearm_ty_link_joint
+   2: R_forearm_tz_link_joint
+   3: R_forearm_roll_link_joint
+   4: R_forearm_pitch_link_joint
+   5: R_forearm_yaw_link_joint
+   6: joint_0.0
+   7: joint_4.0
+   8: joint_8.0
+   9: joint_12.0
+  10: joint_1.0
+  11: joint_5.0
+  12: joint_9.0
+  13: joint_13.0
+  14: joint_2.0
+  15: joint_6.0
+  16: joint_10.0
+  17: joint_14.0
+  18: joint_3.0
+  19: joint_7.0
+  20: joint_11.0
+  21: joint_15.0
