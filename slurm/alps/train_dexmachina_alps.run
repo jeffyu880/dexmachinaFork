@@ -5,8 +5,8 @@
 #SBATCH --ntasks 1
 #SBATCH --mem 40G
 #SBATCH --gres=gpu:2
-#SBATCH --output=logs/allegro/slurm-%j.out
-#SBATCH --error=logs/allegro/slurm-%j.err
+#SBATCH --output=logs/allegro/residual/slurm-%j.out
+#SBATCH --error=logs/allegro/residual/slurm-%j.err
 #SBATCH --mail-user=jeffrey.yu@epfl.ch
 #SBATCH --mail-type=END,FAIL
 #SBATCH --time 24:00:00

@@ -16,4 +16,4 @@
 echo "Starting dexmachina allegro training on $HOSTNAME at $TIMESTAMP"
 source /users/jsyu/miniconda3/etc/profile.d/conda.sh
 conda activate dexmachina-5
-bash examples/train_rl_allegro_ketchup.sh
+bash examples/train_rl_allegro_mixer.sh

@@ -3,8 +3,8 @@ PARAM_FILE="training_params_$(date +%Y%m%d_%H%M%S).txt"
 
 # Define parameters once as associative arrays
 declare -A PARAMS=(
-    [batch_size]="-B 10000"      # should be the num_envs > decreased from 12000 for GPU memory constraints
-    [epochs]="-obf -obt --max_epochs 6000"      # > increased from 5000 to have the same number of total steps
+    [batch_size]="-B 12000"      # should be the num_envs > decreased from 12000 for GPU memory constraints
+    [epochs]="-obf -obt --max_epochs 5000"      # > increased from 5000 to have the same number of total steps
     [object]="--actuate_object --retarget_name para --horizon 32"
     [learning]="-imw 0.5 --learning_rate 0.0003"
     [curriculum]="--gain_mode all --curr_schedule uniform --wait_epochs 200 --num_zero_epoch 500"
@@ -13,12 +13,20 @@ declare -A PARAMS=(
     [task_rewards]="--task_rew_betas 10 1 5 --action_penalty 0.01 --dialback_ep_len 30"
     [thresholds]="--aux_reset_thres 0 0 0 --curr_rew_thres 0.6 0 0 0"
     [training]="--skip_grad --deque_len 20 --save_freq 500 --use_retarget_contact"
-    [arm_model]="-am hybrid --hybrid_scales 0.1 1.0 --kp_init 80 --kv_init 5"
+    [arm_model]="-am residual --hybrid_scales 0.1 1.0 --kp_init 80 --kv_init 5"
     [demo]="--clip mixer-30-200"
     [weights]="-imi 0.2 -bc 0.2 -con 2.0 -ert 0.5"
-    [experiment]="-exp mandi_full"
+    [experiment]="-exp residual_mixer"
     [hand]="--hand allegro_hand"
     [seed]="--seed 24"
+    # [no_object]="-no_obj"                           # only do hand mimicing 
+    # [randomization]="--rand_init_ratio 0.5"         # start the training 50% of the time from a random frame
+    # [retarget]='--use_ik_retarget'          # use just IK kinematic retargeting
+    # [sampling]="--demo_sampling deterministic"
+    # [randomization]="--use_rand --rand_friction --rand_com --rand_mass"
+    # [checkpoint]="--checkpoint /path/to/your/checkpoint.pth"
+    # [residual_cap]="--res_cap"      # cap the max displacement and rotation away from inital pose for wrist
+    # [action_smoothing]="--action_moving_avg 0.6"    # the most recent action is a combination of the current and the previous 
     # [checkpoint]="--checkpoint /home/jeffrey/Documents/Manipulation/Genesis/dexmachina/logs/rl_games/allegro_hand/allegro-example_ketchup20-140-s01-u01_B2048_hybrid_thres0.6_ho16_imi0.3_con3.0_bc0.3/nn/last_allegro_hand_ep_3500_rew_77.97218.pth"
 )
 

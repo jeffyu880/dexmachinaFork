@@ -17,17 +17,17 @@ declare -A PARAMS=(
     [training]="--skip_grad --deque_len 20 --save_freq 500 --use_retarget_contact"
     [arm_model]="-am residual --hybrid_scales 0.1 1.0 --kp_init 100 --kv_init 5"
     [weights]="-imi 0.2 -bc 0.2 -con 2.0 -ert 0.3"
-    [experiment]="-exp residual"
+    [experiment]="-exp residual_moving_avg_0.6"
     [hand]="--hand allegro_hand"
     [seed]="--seed 24"
     # [no_object]="-no_obj"                           # only do hand mimicing 
-    [randomization]="--rand_init_ratio 0.5"         # start the training 50% of the time from a random frame
-    [retarget]='--use_ik_retarget'          # use just IK kinematic retargeting
+    # [randomization]="--rand_init_ratio 0.5"         # start the training 50% of the time from a random frame
+    # [retarget]='--use_ik_retarget'          # use just IK kinematic retargeting
     # [sampling]="--demo_sampling deterministic"
     # [randomization]="--use_rand --rand_friction --rand_com --rand_mass"
     # [checkpoint]="--checkpoint /path/to/your/checkpoint.pth"
-    [residual_cap]="--res_cap"      # cap the max displacement and rotation away from inital pose for wrist
-    # [action_smoothing]="--action_moving_avg 0.8"    # the most recent action is a combination of the current and the previous 
+    # [residual_cap]="--res_cap"      # cap the max displacement and rotation away from inital pose for wrist
+    [action_smoothing]="--action_moving_avg 0.6"    # the most recent action is a combination of the current and the previous 
 )
 
 DEMOS=(
